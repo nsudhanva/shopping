@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>shopping</title>
+    <meta name="description" content="A fast, simple, shared shopping list." />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">S</span>
+        <div>
+          <div class="brand-title">shopping</div>
+          <div class="brand-subtitle">Shared lists, lightning fast</div>
+        </div>
+      </div>
+      <div class="auth">
+        <button id="sign-in-btn" class="contrast">Sign in with Google</button>
+        <button id="sign-out-btn" class="secondary hidden">Sign out</button>
+        <div id="auth-meta" class="auth-meta hidden"></div>
+      </div>
+    </header>
+
+    <div class="app">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h3>Lists</h3>
+          <button id="new-list-btn" class="secondary" aria-label="Add list">+ New</button>
+        </div>
+        <form id="new-list-form" class="hidden">
+          <input id="new-list-input" type="text" name="name" placeholder="List name" maxlength="60" required />
+          <div class="sidebar-actions">
+            <button type="submit">Create</button>
+            <button type="button" id="cancel-list-btn" class="secondary">Cancel</button>
+          </div>
+        </form>
+        <nav>
+          <ul id="lists"></ul>
+        </nav>
+        <div class="sidebar-footer">
+          <small id="auth-hint"></small>
+        </div>
+      </aside>
+
+      <main class="content">
+        <section class="content-header">
+          <div>
+            <h2 id="active-list-title">Loading…</h2>
+            <p id="active-list-subtitle" class="subtitle"></p>
+          </div>
+          <div class="content-actions">
+            <button id="delete-list-btn" class="secondary danger">Delete list</button>
+          </div>
+        </section>
+
+        <section class="composer">
+          <form id="new-item-form">
+            <input id="new-item-input" type="text" name="text" placeholder="Add an item" maxlength="120" required />
+            <button type="submit">Add</button>
+          </form>
+        </section>
+
+        <section class="items">
+          <ul id="items"></ul>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="delete-list-dialog">
+      <article>
+        <header>
+          <h3>Delete this list?</h3>
+        </header>
+        <p>This list will be removed. What should happen to its items?</p>
+        <fieldset>
+          <label>
+            <input type="radio" name="delete-mode" value="delete" checked />
+            Delete items
+          </label>
+          <label>
+            <input type="radio" name="delete-mode" value="keep" />
+            Keep items (move to Inbox)
+          </label>
+        </fieldset>
+        <footer>
+          <button id="confirm-delete-btn" class="contrast">Confirm</button>
+          <button id="cancel-delete-btn" class="secondary">Cancel</button>
+        </footer>
+      </article>
+    </dialog>
+
+    <script type="module" src="/assets/main.js"></script>
+  </body>
+</html>

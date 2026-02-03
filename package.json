@@ -1,0 +1,18 @@
+{
+  "name": "shopping",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/main.ts --outdir public/assets --target browser --format=esm --splitting --minify",
+    "serve": "bun run scripts/serve.ts",
+    "dev": "bun run build && bun run serve",
+    "dns:cloudflare": "bun scripts/cloudflare-dns.mjs",
+    "deploy": "bunx firebase-tools deploy",
+    "deploy:hosting": "bunx firebase-tools deploy --only hosting",
+    "deploy:firestore": "bunx firebase-tools deploy --only firestore"
+  },
+  "dependencies": {
+    "firebase": "latest"
+  }
+}

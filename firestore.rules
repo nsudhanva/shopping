@@ -1,0 +1,72 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isTimestamp(val) {
+      return val is timestamp;
+    }
+
+    function isValidListCreate(data) {
+      return data.keys().hasOnly(["name", "createdAt", "updatedAt", "createdBy", "isDefault"]) &&
+        isString(data.name, 1, 60) &&
+        data.isDefault is bool &&
+        isTimestamp(data.createdAt) &&
+        isTimestamp(data.updatedAt) &&
+        isString(data.createdBy, 1, 128) &&
+        data.createdBy == request.auth.uid;
+    }
+
+    function isValidListUpdate(resourceData, newData) {
+      return newData.keys().hasOnly(["name", "createdAt", "updatedAt", "createdBy", "isDefault"]) &&
+        isString(newData.name, 1, 60) &&
+        newData.isDefault is bool &&
+        isTimestamp(newData.createdAt) &&
+        isTimestamp(newData.updatedAt) &&
+        isString(newData.createdBy, 1, 128) &&
+        newData.createdBy == resourceData.createdBy &&
+        newData.createdAt == resourceData.createdAt;
+    }
+
+    function isValidItemCreate(data) {
+      return data.keys().hasOnly(["text", "checked", "createdAt", "updatedAt", "createdBy"]) &&
+        isString(data.text, 1, 120) &&
+        data.checked is bool &&
+        isTimestamp(data.createdAt) &&
+        isTimestamp(data.updatedAt) &&
+        isString(data.createdBy, 1, 128) &&
+        data.createdBy == request.auth.uid;
+    }
+
+    function isValidItemUpdate(resourceData, newData) {
+      return newData.keys().hasOnly(["text", "checked", "createdAt", "updatedAt", "createdBy"]) &&
+        isString(newData.text, 1, 120) &&
+        newData.checked is bool &&
+        isTimestamp(newData.createdAt) &&
+        isTimestamp(newData.updatedAt) &&
+        isString(newData.createdBy, 1, 128) &&
+        newData.createdBy == resourceData.createdBy &&
+        newData.createdAt == resourceData.createdAt;
+    }
+
+    match /lists/{listId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidListCreate(request.resource.data);
+      allow update: if isSignedIn() && isValidListUpdate(resource.data, request.resource.data);
+      allow delete: if isSignedIn();
+
+      match /items/{itemId} {
+        allow read: if true;
+        allow create: if isSignedIn() && isValidItemCreate(request.resource.data);
+        allow update: if isSignedIn() && isValidItemUpdate(resource.data, request.resource.data);
+        allow delete: if isSignedIn();
+      }
+    }
+  }
+}
