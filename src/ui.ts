@@ -80,11 +80,15 @@ export function renderLists(state: State, handlers: ListHandlers) {
   });
 
   const active = state.lists.find((list) => list.id === state.currentListId) ?? null;
+  const defaultCount = state.lists.filter((list) => list.isDefault).length;
+  const canDelete = Boolean(
+    active && state.user && !(active.isDefault && defaultCount <= 1)
+  );
   elements.activeListTitle.textContent = active?.name ?? "No list selected";
   elements.activeListSubtitle.textContent = active
     ? `${state.items.length} item${state.items.length === 1 ? "" : "s"}`
     : "";
-  elements.deleteListBtn.disabled = !active || !state.user || active.isDefault;
+  elements.deleteListBtn.disabled = !canDelete;
   elements.editListBtn.disabled = !active || !state.user;
   elements.checkAllBtn.disabled = !active || !state.user || state.items.length === 0;
   elements.uncheckAllBtn.disabled = !active || !state.user || state.items.length === 0;

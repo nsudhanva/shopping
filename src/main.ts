@@ -101,6 +101,7 @@ const itemHandlers = {
     await updateItem(state.currentListId, itemId, { text });
     state.editingItemId = null;
     state.editingItemText = "";
+    renderItems(state, itemHandlers);
   },
   onEditCancel: () => {
     state.editingItemId = null;
@@ -220,7 +221,9 @@ elements.newItemForm.addEventListener("submit", async (event) => {
 elements.deleteListBtn.addEventListener("click", () => {
   if (!state.user) return;
   const active = state.lists.find((list) => list.id === state.currentListId) ?? null;
-  if (!active || active.isDefault) return;
+  if (!active) return;
+  const defaultCount = state.lists.filter((list) => list.isDefault).length;
+  if (active.isDefault && defaultCount <= 1) return;
   elements.deleteDialog.showModal();
 });
 
@@ -231,7 +234,9 @@ elements.cancelDeleteBtn.addEventListener("click", () => {
 elements.confirmDeleteBtn.addEventListener("click", async () => {
   if (!state.user) return;
   const active = state.lists.find((list) => list.id === state.currentListId) ?? null;
-  if (!active || active.isDefault) return;
+  if (!active) return;
+  const defaultCount = state.lists.filter((list) => list.isDefault).length;
+  if (active.isDefault && defaultCount <= 1) return;
 
   const mode = (document.querySelector(
     "input[name='delete-mode']:checked"
