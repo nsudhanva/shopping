@@ -222,8 +222,6 @@ elements.deleteListBtn.addEventListener("click", () => {
   if (!state.user) return;
   const active = state.lists.find((list) => list.id === state.currentListId) ?? null;
   if (!active) return;
-  const defaultCount = state.lists.filter((list) => list.isDefault).length;
-  if (active.isDefault && defaultCount <= 1) return;
   elements.deleteDialog.showModal();
 });
 
@@ -235,8 +233,6 @@ elements.confirmDeleteBtn.addEventListener("click", async () => {
   if (!state.user) return;
   const active = state.lists.find((list) => list.id === state.currentListId) ?? null;
   if (!active) return;
-  const defaultCount = state.lists.filter((list) => list.isDefault).length;
-  if (active.isDefault && defaultCount <= 1) return;
 
   const mode = (document.querySelector(
     "input[name='delete-mode']:checked"

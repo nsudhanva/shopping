@@ -80,10 +80,7 @@ export function renderLists(state: State, handlers: ListHandlers) {
   });
 
   const active = state.lists.find((list) => list.id === state.currentListId) ?? null;
-  const defaultCount = state.lists.filter((list) => list.isDefault).length;
-  const canDelete = Boolean(
-    active && state.user && !(active.isDefault && defaultCount <= 1)
-  );
+  const canDelete = Boolean(active && state.user);
   elements.activeListTitle.textContent = active?.name ?? "No list selected";
   elements.activeListSubtitle.textContent = active
     ? `${state.items.length} item${state.items.length === 1 ? "" : "s"}`
