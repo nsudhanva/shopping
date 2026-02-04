@@ -49,7 +49,7 @@ bunx firebase-tools use sudhanva-personal
 3. Create Hosting site (if not created yet).
 
 ```bash
-bunx firebase-tools hosting:sites:create shopping
+bunx firebase-tools hosting:sites:create sudhanva-shopping-app
 ```
 
 4. Enable Google provider in Firebase Auth Console.
@@ -81,4 +81,3 @@ On push to `main`, the workflow deploys to Firebase Hosting.
 
 Required repo secrets:
 - `FIREBASE_SERVICE_ACCOUNT_SUDHANVA_PERSONAL` (JSON service account)
-

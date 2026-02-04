@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "shopping",
+    "site": "sudhanva-shopping-app",
     "public": "public",
     "ignore": [
       "firebase.json",
