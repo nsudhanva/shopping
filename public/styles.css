@@ -142,6 +142,31 @@ body {
   gap: 1rem;
 }
 
+.list-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.list-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.list-edit-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.content-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .subtitle {
   color: rgba(16, 38, 31, 0.6);
   margin: 0.25rem 0 0;
@@ -175,6 +200,10 @@ body {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex: 1;
+}
+
+.item-edit-input {
   flex: 1;
 }
 

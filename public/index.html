@@ -47,11 +47,23 @@
 
       <main class="content">
         <section class="content-header">
-          <div>
-            <h2 id="active-list-title">Loading…</h2>
+          <div class="list-meta">
+            <div class="list-title">
+              <h2 id="active-list-title">Loading…</h2>
+              <button id="edit-list-btn" class="secondary">Rename</button>
+            </div>
+            <form id="edit-list-form" class="hidden">
+              <input id="edit-list-input" type="text" name="name" placeholder="List name" maxlength="60" required />
+              <div class="list-edit-actions">
+                <button type="submit">Save</button>
+                <button type="button" id="cancel-edit-list-btn" class="secondary">Cancel</button>
+              </div>
+            </form>
             <p id="active-list-subtitle" class="subtitle"></p>
           </div>
           <div class="content-actions">
+            <button id="check-all-btn" class="secondary">Check all</button>
+            <button id="clear-all-btn" class="secondary danger">Clear all</button>
             <button id="delete-list-btn" class="secondary danger">Delete list</button>
           </div>
         </section>

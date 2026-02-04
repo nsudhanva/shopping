@@ -63,6 +63,10 @@ type State = {
   lists: ListDoc[];
   items: ItemDoc[];
   currentListId: string | null;
+  listsLoaded: boolean;
+  ensureDefaultInFlight: boolean;
+  editingItemId: string | null;
+  editingItemText: string;
 };
 
 const state: State = {
@@ -70,6 +74,10 @@ const state: State = {
   lists: [],
   items: [],
   currentListId: null,
+  listsLoaded: false,
+  ensureDefaultInFlight: false,
+  editingItemId: null,
+  editingItemText: "",
 };
 
 const elements = {
@@ -82,6 +90,12 @@ const elements = {
   newListForm: document.querySelector<HTMLFormElement>("#new-list-form")!,
   newListInput: document.querySelector<HTMLInputElement>("#new-list-input")!,
   cancelListBtn: document.querySelector<HTMLButtonElement>("#cancel-list-btn")!,
+  editListBtn: document.querySelector<HTMLButtonElement>("#edit-list-btn")!,
+  editListForm: document.querySelector<HTMLFormElement>("#edit-list-form")!,
+  editListInput: document.querySelector<HTMLInputElement>("#edit-list-input")!,
+  cancelEditListBtn: document.querySelector<HTMLButtonElement>("#cancel-edit-list-btn")!,
+  checkAllBtn: document.querySelector<HTMLButtonElement>("#check-all-btn")!,
+  clearAllBtn: document.querySelector<HTMLButtonElement>("#clear-all-btn")!,
   activeListTitle: document.querySelector<HTMLHeadingElement>("#active-list-title")!,
   activeListSubtitle: document.querySelector<HTMLParagraphElement>("#active-list-subtitle")!,
   deleteListBtn: document.querySelector<HTMLButtonElement>("#delete-list-btn")!,
@@ -99,6 +113,9 @@ function setEditingEnabled(enabled: boolean) {
   elements.newItemInput.disabled = !enabled;
   elements.deleteListBtn.disabled = !enabled;
   elements.newItemForm.querySelector("button")!.disabled = !enabled;
+  elements.editListBtn.disabled = !enabled;
+  elements.checkAllBtn.disabled = !enabled;
+  elements.clearAllBtn.disabled = !enabled;
 }
 
 function setAuthUi() {
@@ -121,6 +138,8 @@ function setAuthUi() {
 function setActiveList(listId: string | null) {
   state.currentListId = listId;
   state.items = [];
+  state.editingItemId = null;
+  state.editingItemText = "";
   renderItems();
   renderLists();
   subscribeItems();
@@ -159,6 +178,12 @@ function renderLists() {
     ? `${state.items.length} item${state.items.length === 1 ? "" : "s"}`
     : "";
   elements.deleteListBtn.disabled = !active || !state.user || active.isDefault;
+  elements.editListBtn.disabled = !active || !state.user;
+  elements.checkAllBtn.disabled = !active || !state.user || state.items.length === 0;
+  elements.clearAllBtn.disabled = !active || !state.user || state.items.length === 0;
+  if (!active) {
+    elements.editListForm.classList.add("hidden");
+  }
 }
 
 function renderItems() {
@@ -184,10 +209,6 @@ function renderItems() {
     checkbox.checked = item.checked;
     checkbox.disabled = !state.user;
 
-    const text = document.createElement("span");
-    text.className = "item-text" + (item.checked ? " checked" : "");
-    text.textContent = item.text;
-
     checkbox.addEventListener("change", async () => {
       if (!state.user) return;
       await updateDoc(doc(db, "lists", state.currentListId!, "items", item.id), {
@@ -200,25 +221,82 @@ function renderItems() {
     });
 
     main.appendChild(checkbox);
-    main.appendChild(text);
+    if (state.editingItemId === item.id) {
+      const input = document.createElement("input");
+      input.className = "item-edit-input";
+      input.type = "text";
+      input.maxLength = 120;
+      input.value = state.editingItemText;
+      input.addEventListener("input", () => {
+        state.editingItemText = input.value;
+      });
+      input.addEventListener("keydown", async (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          await saveItemEdit(item.id);
+        }
+      });
+      main.appendChild(input);
+    } else {
+      const text = document.createElement("span");
+      text.className = "item-text" + (item.checked ? " checked" : "");
+      text.textContent = item.text;
+      main.appendChild(text);
+    }
 
     const actions = document.createElement("div");
     actions.className = "item-actions";
 
-    const deleteBtn = document.createElement("button");
-    deleteBtn.type = "button";
-    deleteBtn.className = "secondary";
-    deleteBtn.textContent = "Delete";
-    deleteBtn.disabled = !state.user;
-    deleteBtn.addEventListener("click", async () => {
-      if (!state.user) return;
-      await deleteDoc(doc(db, "lists", state.currentListId!, "items", item.id));
-      await updateDoc(doc(db, "lists", state.currentListId!), {
-        updatedAt: serverTimestamp(),
+    if (state.editingItemId === item.id) {
+      const saveBtn = document.createElement("button");
+      saveBtn.type = "button";
+      saveBtn.textContent = "Save";
+      saveBtn.disabled = !state.user;
+      saveBtn.addEventListener("click", async () => {
+        await saveItemEdit(item.id);
       });
-    });
 
-    actions.appendChild(deleteBtn);
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "secondary";
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.addEventListener("click", () => {
+        state.editingItemId = null;
+        state.editingItemText = "";
+        renderItems();
+      });
+
+      actions.appendChild(saveBtn);
+      actions.appendChild(cancelBtn);
+    } else {
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "secondary";
+      editBtn.textContent = "Edit";
+      editBtn.disabled = !state.user;
+      editBtn.addEventListener("click", () => {
+        if (!state.user) return;
+        state.editingItemId = item.id;
+        state.editingItemText = item.text;
+        renderItems();
+      });
+
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "secondary";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.disabled = !state.user;
+      deleteBtn.addEventListener("click", async () => {
+        if (!state.user) return;
+        await deleteDoc(doc(db, "lists", state.currentListId!, "items", item.id));
+        await updateDoc(doc(db, "lists", state.currentListId!), {
+          updatedAt: serverTimestamp(),
+        });
+      });
+
+      actions.appendChild(editBtn);
+      actions.appendChild(deleteBtn);
+    }
 
     li.appendChild(main);
     li.appendChild(actions);
@@ -239,6 +317,65 @@ async function ensureDefaultListId(): Promise<string> {
     isDefault: true,
   });
   return ref.id;
+}
+
+function maybeEnsureDefaultList() {
+  if (!state.user || !state.listsLoaded || state.ensureDefaultInFlight) return;
+  if (state.lists.some((list) => list.isDefault)) return;
+  state.ensureDefaultInFlight = true;
+  void ensureDefaultListId().finally(() => {
+    state.ensureDefaultInFlight = false;
+  });
+}
+
+async function saveItemEdit(itemId: string) {
+  if (!state.user || !state.currentListId) return;
+  const text = state.editingItemText.trim();
+  if (!text) return;
+  await updateDoc(doc(db, "lists", state.currentListId, "items", itemId), {
+    text,
+    updatedAt: serverTimestamp(),
+  });
+  await updateDoc(doc(db, "lists", state.currentListId), {
+    updatedAt: serverTimestamp(),
+  });
+  state.editingItemId = null;
+  state.editingItemText = "";
+}
+
+async function updateAllItems(checked: boolean) {
+  if (!state.user || !state.currentListId) return;
+  const itemsSnap = await getDocs(collection(db, "lists", state.currentListId, "items"));
+  const batches = chunkDocs(itemsSnap.docs, 400);
+  for (const batchDocs of batches) {
+    const batch = writeBatch(db);
+    for (const item of batchDocs) {
+      batch.update(item.ref, {
+        checked,
+        updatedAt: serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+  await updateDoc(doc(db, "lists", state.currentListId), {
+    updatedAt: serverTimestamp(),
+  });
+}
+
+async function clearAllItems() {
+  if (!state.user || !state.currentListId) return;
+  const itemsSnap = await getDocs(collection(db, "lists", state.currentListId, "items"));
+  const batches = chunkDocs(itemsSnap.docs, 400);
+  for (const batchDocs of batches) {
+    const batch = writeBatch(db);
+    for (const item of batchDocs) {
+      batch.delete(item.ref);
+    }
+    await batch.commit();
+  }
+  await updateDoc(doc(db, "lists", state.currentListId), {
+    updatedAt: serverTimestamp(),
+  });
 }
 
 function chunkDocs<T>(items: T[], size: number): T[][] {
@@ -308,6 +445,10 @@ function subscribeItems() {
         createdBy: String(data.createdBy ?? ""),
       } satisfies ItemDoc;
     });
+    if (state.editingItemId && !state.items.find((item) => item.id === state.editingItemId)) {
+      state.editingItemId = null;
+      state.editingItemText = "";
+    }
     renderItems();
     renderLists();
   });
@@ -328,6 +469,8 @@ onSnapshot(listsQuery, (snapshot) => {
     } satisfies ListDoc;
   });
 
+  state.listsLoaded = true;
+
   if (!state.currentListId) {
     const defaultList = state.lists.find((list) => list.isDefault) ?? state.lists[0];
     setActiveList(defaultList?.id ?? null);
@@ -338,17 +481,13 @@ onSnapshot(listsQuery, (snapshot) => {
     renderLists();
   }
 
-  if (state.user && state.lists.length === 0) {
-    void ensureDefaultListId();
-  }
+  maybeEnsureDefaultList();
 });
 
 onAuthStateChanged(auth, (user) => {
   state.user = user;
   setAuthUi();
-  if (user && state.lists.length === 0) {
-    void ensureDefaultListId();
-  }
+  maybeEnsureDefaultList();
 });
 
 elements.signInBtn.addEventListener("click", async () => {
@@ -392,6 +531,32 @@ elements.newListForm.addEventListener("submit", async (event) => {
   elements.newListForm.classList.add("hidden");
 });
 
+elements.editListBtn.addEventListener("click", () => {
+  if (!state.user) return;
+  const active = getActiveList();
+  if (!active) return;
+  elements.editListInput.value = active.name;
+  elements.editListForm.classList.remove("hidden");
+  elements.editListInput.focus();
+});
+
+elements.cancelEditListBtn.addEventListener("click", () => {
+  elements.editListForm.reset();
+  elements.editListForm.classList.add("hidden");
+});
+
+elements.editListForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!state.user || !state.currentListId) return;
+  const name = elements.editListInput.value.trim();
+  if (!name) return;
+  await updateDoc(doc(db, "lists", state.currentListId), {
+    name,
+    updatedAt: serverTimestamp(),
+  });
+  elements.editListForm.classList.add("hidden");
+});
+
 elements.newItemForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!state.user || !state.currentListId) return;
@@ -419,6 +584,17 @@ elements.deleteListBtn.addEventListener("click", () => {
   if (!active) return;
   if (active.isDefault) return;
   elements.deleteDialog.showModal();
+});
+
+elements.checkAllBtn.addEventListener("click", async () => {
+  if (!state.user || !state.currentListId) return;
+  await updateAllItems(true);
+});
+
+elements.clearAllBtn.addEventListener("click", async () => {
+  if (!state.user || !state.currentListId) return;
+  if (!confirm("Clear all items from this list?")) return;
+  await clearAllItems();
 });
 
 elements.cancelDeleteBtn.addEventListener("click", () => {
