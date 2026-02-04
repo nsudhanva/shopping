@@ -94,7 +94,12 @@ const elements = {
   editListForm: document.querySelector<HTMLFormElement>("#edit-list-form")!,
   editListInput: document.querySelector<HTMLInputElement>("#edit-list-input")!,
   cancelEditListBtn: document.querySelector<HTMLButtonElement>("#cancel-edit-list-btn")!,
+  renameListForm: document.querySelector<HTMLFormElement>("#rename-list-form")!,
+  renameListInput: document.querySelector<HTMLInputElement>("#rename-list-input")!,
+  cancelRenameListBtn: document.querySelector<HTMLButtonElement>("#cancel-rename-list-btn")!,
   checkAllBtn: document.querySelector<HTMLButtonElement>("#check-all-btn")!,
+  uncheckAllBtn: document.querySelector<HTMLButtonElement>("#uncheck-all-btn")!,
+  clearCheckedBtn: document.querySelector<HTMLButtonElement>("#clear-checked-btn")!,
   clearAllBtn: document.querySelector<HTMLButtonElement>("#clear-all-btn")!,
   activeListTitle: document.querySelector<HTMLHeadingElement>("#active-list-title")!,
   activeListSubtitle: document.querySelector<HTMLParagraphElement>("#active-list-subtitle")!,
@@ -140,6 +145,7 @@ function setActiveList(listId: string | null) {
   state.items = [];
   state.editingItemId = null;
   state.editingItemText = "";
+  elements.renameListForm.classList.add("hidden");
   renderItems();
   renderLists();
   subscribeItems();
@@ -169,6 +175,21 @@ function renderLists() {
       setActiveList(list.id);
     });
     li.appendChild(button);
+
+    const renameBtn = document.createElement("button");
+    renameBtn.type = "button";
+    renameBtn.className = "secondary";
+    renameBtn.textContent = "Rename";
+    renameBtn.disabled = !state.user;
+    renameBtn.addEventListener("click", () => {
+      if (!state.user) return;
+      setActiveList(list.id);
+      elements.renameListInput.value = list.name;
+      elements.renameListForm.classList.remove("hidden");
+      elements.renameListInput.focus();
+    });
+
+    li.appendChild(renameBtn);
     elements.lists.appendChild(li);
   });
 
@@ -180,6 +201,9 @@ function renderLists() {
   elements.deleteListBtn.disabled = !active || !state.user || active.isDefault;
   elements.editListBtn.disabled = !active || !state.user;
   elements.checkAllBtn.disabled = !active || !state.user || state.items.length === 0;
+  elements.uncheckAllBtn.disabled = !active || !state.user || state.items.length === 0;
+  elements.clearCheckedBtn.disabled =
+    !active || !state.user || state.items.filter((item) => item.checked).length === 0;
   elements.clearAllBtn.disabled = !active || !state.user || state.items.length === 0;
   if (!active) {
     elements.editListForm.classList.add("hidden");
@@ -378,6 +402,23 @@ async function clearAllItems() {
   });
 }
 
+async function clearCheckedItems() {
+  if (!state.user || !state.currentListId) return;
+  const itemsSnap = await getDocs(collection(db, "lists", state.currentListId, "items"));
+  const checkedDocs = itemsSnap.docs.filter((docSnap) => Boolean(docSnap.data().checked));
+  const batches = chunkDocs(checkedDocs, 400);
+  for (const batchDocs of batches) {
+    const batch = writeBatch(db);
+    for (const item of batchDocs) {
+      batch.delete(item.ref);
+    }
+    await batch.commit();
+  }
+  await updateDoc(doc(db, "lists", state.currentListId), {
+    updatedAt: serverTimestamp(),
+  });
+}
+
 function chunkDocs<T>(items: T[], size: number): T[][] {
   const result: T[][] = [];
   for (let i = 0; i < items.length; i += size) {
@@ -557,6 +598,23 @@ elements.editListForm.addEventListener("submit", async (event) => {
   elements.editListForm.classList.add("hidden");
 });
 
+elements.renameListForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!state.user || !state.currentListId) return;
+  const name = elements.renameListInput.value.trim();
+  if (!name) return;
+  await updateDoc(doc(db, "lists", state.currentListId), {
+    name,
+    updatedAt: serverTimestamp(),
+  });
+  elements.renameListForm.classList.add("hidden");
+});
+
+elements.cancelRenameListBtn.addEventListener("click", () => {
+  elements.renameListForm.reset();
+  elements.renameListForm.classList.add("hidden");
+});
+
 elements.newItemForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!state.user || !state.currentListId) return;
@@ -589,6 +647,17 @@ elements.deleteListBtn.addEventListener("click", () => {
 elements.checkAllBtn.addEventListener("click", async () => {
   if (!state.user || !state.currentListId) return;
   await updateAllItems(true);
+});
+
+elements.uncheckAllBtn.addEventListener("click", async () => {
+  if (!state.user || !state.currentListId) return;
+  await updateAllItems(false);
+});
+
+elements.clearCheckedBtn.addEventListener("click", async () => {
+  if (!state.user || !state.currentListId) return;
+  if (!confirm("Clear checked items from this list?")) return;
+  await clearCheckedItems();
 });
 
 elements.clearAllBtn.addEventListener("click", async () => {

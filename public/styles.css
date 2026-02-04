@@ -93,6 +93,9 @@ body {
 
 .sidebar nav li {
   list-style: none;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .sidebar nav button {
@@ -103,6 +106,12 @@ body {
   padding: 0.65rem 0.8rem;
   border-radius: 12px;
   color: var(--ink);
+}
+
+.sidebar nav li > button.secondary {
+  width: auto;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.75rem;
 }
 
 .sidebar nav button.active {

@@ -40,6 +40,13 @@
         <nav>
           <ul id="lists"></ul>
         </nav>
+        <form id="rename-list-form" class="hidden">
+          <input id="rename-list-input" type="text" name="name" placeholder="Rename list" maxlength="60" required />
+          <div class="sidebar-actions">
+            <button type="submit">Save</button>
+            <button type="button" id="cancel-rename-list-btn" class="secondary">Cancel</button>
+          </div>
+        </form>
         <div class="sidebar-footer">
           <small id="auth-hint"></small>
         </div>
@@ -63,6 +70,8 @@
           </div>
           <div class="content-actions">
             <button id="check-all-btn" class="secondary">Check all</button>
+            <button id="uncheck-all-btn" class="secondary">Uncheck all</button>
+            <button id="clear-checked-btn" class="secondary danger">Clear checked</button>
             <button id="clear-all-btn" class="secondary danger">Clear all</button>
             <button id="delete-list-btn" class="secondary danger">Delete list</button>
           </div>
