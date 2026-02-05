@@ -119,18 +119,18 @@ body {
 
 .sidebar nav li {
   list-style: none;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: 0.5rem;
-  row-gap: 0.35rem;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
 }
 
 .list-actions {
   display: flex;
   gap: 0.35rem;
   align-items: center;
-  justify-self: end;
+  flex-wrap: wrap;
+  justify-content: flex-start;
 }
 
 .reorder-btn {
@@ -391,14 +391,6 @@ textarea {
   .sidebar nav ul {
     flex-direction: row;
     overflow-x: auto;
-  }
-
-  .sidebar nav li {
-    grid-template-columns: 1fr;
-  }
-
-  .list-actions {
-    justify-self: start;
   }
 
   .sidebar nav li > button {
