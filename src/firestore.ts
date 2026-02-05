@@ -25,9 +25,25 @@ function toDate(value: unknown): Date {
   return new Date();
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function makeOrder(): number {
+  return Date.now() + Math.random();
+}
+
+function resolveOrder(data: DocumentData): { order: number; missing: boolean } {
+  if (isFiniteNumber(data.order)) {
+    return { order: data.order, missing: false };
+  }
+  return { order: toDate(data.createdAt).getTime(), missing: true };
+}
+
 function mapList(snapshot: QuerySnapshot<DocumentData>): ListDoc[] {
   return snapshot.docs.map((docSnap) => {
     const data = docSnap.data();
+    const { order, missing } = resolveOrder(data);
     return {
       id: docSnap.id,
       name: String(data.name ?? "Untitled"),
@@ -37,6 +53,8 @@ function mapList(snapshot: QuerySnapshot<DocumentData>): ListDoc[] {
       createdByName: data.createdByName ? String(data.createdByName) : undefined,
       updatedByName: data.updatedByName ? String(data.updatedByName) : undefined,
       isDefault: Boolean(data.isDefault),
+      order,
+      orderMissing: missing,
     } satisfies ListDoc;
   });
 }
@@ -44,6 +62,7 @@ function mapList(snapshot: QuerySnapshot<DocumentData>): ListDoc[] {
 function mapItems(snapshot: QuerySnapshot<DocumentData>): ItemDoc[] {
   return snapshot.docs.map((docSnap) => {
     const data = docSnap.data();
+    const { order, missing } = resolveOrder(data);
     return {
       id: docSnap.id,
       text: String(data.text ?? ""),
@@ -53,12 +72,14 @@ function mapItems(snapshot: QuerySnapshot<DocumentData>): ItemDoc[] {
       createdBy: String(data.createdBy ?? ""),
       createdByName: data.createdByName ? String(data.createdByName) : undefined,
       updatedByName: data.updatedByName ? String(data.updatedByName) : undefined,
+      order,
+      orderMissing: missing,
     } satisfies ItemDoc;
   });
 }
 
 export function subscribeLists(onChange: (lists: ListDoc[]) => void): () => void {
-  const listsQuery = query(listCollection, orderBy("updatedAt", "desc"));
+  const listsQuery = query(listCollection, orderBy("order", "asc"));
   return onSnapshot(listsQuery, (snapshot) => {
     onChange(mapList(snapshot));
   });
@@ -70,7 +91,7 @@ export function subscribeItems(
 ): () => void {
   const itemsQuery = query(
     collection(db, "lists", listId, "items"),
-    orderBy("createdAt", "asc")
+    orderBy("order", "asc")
   );
   return onSnapshot(itemsQuery, (snapshot) => {
     onChange(mapItems(snapshot));
@@ -91,6 +112,7 @@ export async function createList(params: {
     createdByName: params.userName,
     updatedByName: params.userName,
     isDefault: params.isDefault,
+    order: makeOrder(),
   });
   return ref.id;
 }
@@ -124,6 +146,7 @@ export async function createItem(params: {
     createdBy: params.userId,
     createdByName: params.userName,
     updatedByName: params.userName,
+    order: makeOrder(),
   });
   await touchList(params.listId, params.userName);
 }
@@ -243,6 +266,9 @@ export async function deleteListWithItems(params: {
       if (params.keepItems && defaultListId) {
         const targetRef = doc(db, "lists", defaultListId, "items", item.id);
         const data = item.data();
+        const order = isFiniteNumber(data.order)
+          ? data.order
+          : toDate(data.createdAt).getTime();
         batch.set(targetRef, {
           text: String(data.text ?? ""),
           checked: Boolean(data.checked),
@@ -251,6 +277,7 @@ export async function deleteListWithItems(params: {
           createdBy: params.userId,
           createdByName: params.userName,
           updatedByName: params.userName,
+          order,
         });
       }
       batch.delete(item.ref);
@@ -259,4 +286,104 @@ export async function deleteListWithItems(params: {
   }
 
   await deleteDoc(doc(db, "lists", params.listId));
+}
+
+export async function backfillListOrder(userName: string) {
+  const snapshot = await getDocs(listCollection);
+  const missing = snapshot.docs
+    .map((docSnap) => {
+      const data = docSnap.data();
+      return {
+        ref: docSnap.ref,
+        createdAt: toDate(data.createdAt),
+        order: isFiniteNumber(data.order) ? data.order : null,
+      };
+    })
+    .filter((entry) => entry.order === null);
+
+  if (missing.length === 0) return;
+
+  missing.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const updates = missing.map((entry, index) => ({
+    ref: entry.ref,
+    order: entry.createdAt.getTime() + index,
+  }));
+
+  const batches = chunkDocs(updates, 400);
+  for (const batchDocs of batches) {
+    const batch = writeBatch(db);
+    for (const entry of batchDocs) {
+      batch.update(entry.ref, {
+        order: entry.order,
+        updatedAt: serverTimestamp(),
+        updatedByName: userName,
+      });
+    }
+    await batch.commit();
+  }
+}
+
+export async function backfillItemOrder(listId: string, userName: string) {
+  const itemsSnap = await getDocs(collection(db, "lists", listId, "items"));
+  const missing = itemsSnap.docs
+    .map((docSnap) => {
+      const data = docSnap.data();
+      return {
+        ref: docSnap.ref,
+        createdAt: toDate(data.createdAt),
+        order: isFiniteNumber(data.order) ? data.order : null,
+      };
+    })
+    .filter((entry) => entry.order === null);
+
+  if (missing.length === 0) return;
+
+  missing.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const updates = missing.map((entry, index) => ({
+    ref: entry.ref,
+    order: entry.createdAt.getTime() + index,
+  }));
+
+  const batches = chunkDocs(updates, 400);
+  for (const batchDocs of batches) {
+    const batch = writeBatch(db);
+    for (const entry of batchDocs) {
+      batch.update(entry.ref, {
+        order: entry.order,
+        updatedAt: serverTimestamp(),
+        updatedByName: userName,
+      });
+    }
+    await batch.commit();
+  }
+  await touchList(listId, userName);
+}
+
+export async function persistListOrder(lists: Array<{ id: string; order: number }>, userName: string) {
+  const batch = writeBatch(db);
+  for (const list of lists) {
+    batch.update(doc(db, "lists", list.id), {
+      order: list.order,
+      updatedAt: serverTimestamp(),
+      updatedByName: userName,
+    });
+  }
+  await batch.commit();
+}
+
+export async function persistItemOrder(
+  listId: string,
+  items: Array<{ id: string; order: number }>,
+  userName: string
+) {
+  const batch = writeBatch(db);
+  for (const item of items) {
+    batch.update(doc(db, "lists", listId, "items", item.id), {
+      order: item.order,
+      updatedAt: serverTimestamp(),
+      updatedByName: userName,
+    });
+  }
+  await batch.commit();
+  await touchList(listId, userName);
 }

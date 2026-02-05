@@ -9,6 +9,8 @@ import { elements } from "./elements";
 import { state } from "./state";
 import type { ListDoc } from "./types";
 import {
+  backfillItemOrder,
+  backfillListOrder,
   clearAllItems,
   clearCheckedItems,
   createItem,
@@ -16,6 +18,8 @@ import {
   deleteItem,
   deleteListWithItems,
   ensureDefaultListId,
+  persistItemOrder,
+  persistListOrder,
   subscribeItems,
   subscribeLists,
   updateAllItems,
@@ -36,6 +40,21 @@ function applyTheme(theme: "dark" | "light") {
   document.documentElement.setAttribute("data-theme", theme);
   elements.themeToggle.textContent = theme === "dark" ? "Light mode" : "Dark mode";
   elements.themeToggle.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+}
+
+function swapOrders(
+  currentOrder: number,
+  targetOrder: number,
+  direction: "up" | "down"
+): { current: number; target: number } {
+  if (currentOrder !== targetOrder) {
+    return { current: targetOrder, target: currentOrder };
+  }
+  const delta = 0.0001;
+  if (direction === "up") {
+    return { current: targetOrder - delta, target: targetOrder + delta };
+  }
+  return { current: targetOrder + delta, target: targetOrder - delta };
 }
 
 function setActiveList(listId: string | null) {
@@ -67,6 +86,17 @@ function subscribeToItems() {
       state.editingItemId = null;
       state.editingItemText = "";
     }
+    if (
+      state.user &&
+      state.currentListId &&
+      state.items.some((item) => item.orderMissing) &&
+      !state.backfilledItemLists.has(state.currentListId)
+    ) {
+      state.backfilledItemLists.add(state.currentListId);
+      void backfillItemOrder(state.currentListId, getUserLabel()).catch(() => {
+        state.backfilledItemLists.delete(state.currentListId!);
+      });
+    }
     renderItems(state, itemHandlers);
     renderLists(state, listHandlers);
   });
@@ -81,6 +111,15 @@ function maybeEnsureDefaultList() {
   });
 }
 
+function maybeBackfillListOrder() {
+  if (!state.user || state.backfillListsInFlight) return;
+  if (!state.lists.some((list) => list.orderMissing)) return;
+  state.backfillListsInFlight = true;
+  void backfillListOrder(getUserLabel()).finally(() => {
+    state.backfillListsInFlight = false;
+  });
+}
+
 const listHandlers = {
   onSelectList: (listId: string) => {
     setActiveList(listId);
@@ -90,6 +129,32 @@ const listHandlers = {
     elements.renameListInput.value = list.name;
     elements.renameListForm.classList.remove("hidden");
     elements.renameListInput.focus();
+  },
+  onMoveList: async (listId: string, direction: "up" | "down") => {
+    if (!state.user) return;
+    const index = state.lists.findIndex((list) => list.id === listId);
+    if (index < 0) return;
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= state.lists.length) return;
+
+    const current = state.lists[index];
+    const target = state.lists[targetIndex];
+    const orders = swapOrders(current.order, target.order, direction);
+    const updatedCurrent = { ...current, order: orders.current };
+    const updatedTarget = { ...target, order: orders.target };
+    const updatedLists = [...state.lists];
+    updatedLists[index] = updatedTarget;
+    updatedLists[targetIndex] = updatedCurrent;
+    state.lists = updatedLists;
+    renderLists(state, listHandlers);
+
+    await persistListOrder(
+      [
+        { id: updatedCurrent.id, order: updatedCurrent.order },
+        { id: updatedTarget.id, order: updatedTarget.order },
+      ],
+      getUserLabel()
+    );
   },
 };
 
@@ -124,6 +189,33 @@ const itemHandlers = {
     if (!state.user || !state.currentListId) return;
     await deleteItem(state.currentListId, itemId, getUserLabel());
   },
+  onMoveItem: async (itemId: string, direction: "up" | "down") => {
+    if (!state.user || !state.currentListId) return;
+    const index = state.items.findIndex((item) => item.id === itemId);
+    if (index < 0) return;
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= state.items.length) return;
+
+    const current = state.items[index];
+    const target = state.items[targetIndex];
+    const orders = swapOrders(current.order, target.order, direction);
+    const updatedCurrent = { ...current, order: orders.current };
+    const updatedTarget = { ...target, order: orders.target };
+    const updatedItems = [...state.items];
+    updatedItems[index] = updatedTarget;
+    updatedItems[targetIndex] = updatedCurrent;
+    state.items = updatedItems;
+    renderItems(state, itemHandlers);
+
+    await persistItemOrder(
+      state.currentListId,
+      [
+        { id: updatedCurrent.id, order: updatedCurrent.order },
+        { id: updatedTarget.id, order: updatedTarget.order },
+      ],
+      getUserLabel()
+    );
+  },
 };
 
 subscribeLists((lists) => {
@@ -141,12 +233,16 @@ subscribeLists((lists) => {
   }
 
   maybeEnsureDefaultList();
+  maybeBackfillListOrder();
 });
 
 onAuthStateChanged(auth, (user) => {
   state.user = user;
   setAuthUi(state);
+  renderLists(state, listHandlers);
+  renderItems(state, itemHandlers);
   maybeEnsureDefaultList();
+  maybeBackfillListOrder();
 });
 
 elements.signInBtn.addEventListener("click", async () => {

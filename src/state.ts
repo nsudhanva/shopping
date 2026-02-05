@@ -9,4 +9,6 @@ export const state: State = {
   ensureDefaultInFlight: false,
   editingItemId: null,
   editingItemText: "",
+  backfillListsInFlight: false,
+  backfilledItemLists: new Set<string>(),
 };

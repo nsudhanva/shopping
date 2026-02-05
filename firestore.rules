@@ -13,12 +13,20 @@ service cloud.firestore {
       return val is timestamp;
     }
 
+    function isNumber(val) {
+      return val is number;
+    }
+
     function hasKey(data, key) {
       return data.keys().hasAny([key]);
     }
 
     function optionalString(data, key, minLen, maxLen) {
       return !hasKey(data, key) || isString(data[key], minLen, maxLen);
+    }
+
+    function optionalNumber(data, key) {
+      return !hasKey(data, key) || isNumber(data[key]);
     }
 
     function isValidListCreate(data) {
@@ -29,7 +37,8 @@ service cloud.firestore {
           "createdBy",
           "createdByName",
           "updatedByName",
-          "isDefault"
+          "isDefault",
+          "order"
         ]) &&
         isString(data.name, 1, 60) &&
         data.isDefault is bool &&
@@ -38,7 +47,8 @@ service cloud.firestore {
         isString(data.createdBy, 1, 128) &&
         data.createdBy == request.auth.uid &&
         optionalString(data, "createdByName", 1, 128) &&
-        optionalString(data, "updatedByName", 1, 128);
+        optionalString(data, "updatedByName", 1, 128) &&
+        isNumber(data.order);
     }
 
     function isValidListUpdate(resourceData, newData) {
@@ -49,7 +59,8 @@ service cloud.firestore {
           "createdBy",
           "createdByName",
           "updatedByName",
-          "isDefault"
+          "isDefault",
+          "order"
         ]) &&
         isString(newData.name, 1, 60) &&
         newData.isDefault is bool &&
@@ -59,7 +70,8 @@ service cloud.firestore {
         newData.createdBy == resourceData.createdBy &&
         newData.createdAt == resourceData.createdAt &&
         optionalString(newData, "createdByName", 1, 128) &&
-        optionalString(newData, "updatedByName", 1, 128);
+        optionalString(newData, "updatedByName", 1, 128) &&
+        optionalNumber(newData, "order");
     }
 
     function isValidItemCreate(data) {
@@ -70,7 +82,8 @@ service cloud.firestore {
           "updatedAt",
           "createdBy",
           "createdByName",
-          "updatedByName"
+          "updatedByName",
+          "order"
         ]) &&
         isString(data.text, 1, 120) &&
         data.checked is bool &&
@@ -79,7 +92,8 @@ service cloud.firestore {
         isString(data.createdBy, 1, 128) &&
         data.createdBy == request.auth.uid &&
         optionalString(data, "createdByName", 1, 128) &&
-        optionalString(data, "updatedByName", 1, 128);
+        optionalString(data, "updatedByName", 1, 128) &&
+        isNumber(data.order);
     }
 
     function isValidItemUpdate(resourceData, newData) {
@@ -90,7 +104,8 @@ service cloud.firestore {
           "updatedAt",
           "createdBy",
           "createdByName",
-          "updatedByName"
+          "updatedByName",
+          "order"
         ]) &&
         isString(newData.text, 1, 120) &&
         newData.checked is bool &&
@@ -100,7 +115,8 @@ service cloud.firestore {
         newData.createdBy == resourceData.createdBy &&
         newData.createdAt == resourceData.createdAt &&
         optionalString(newData, "createdByName", 1, 128) &&
-        optionalString(newData, "updatedByName", 1, 128);
+        optionalString(newData, "updatedByName", 1, 128) &&
+        optionalNumber(newData, "order");
     }
 
     match /lists/{listId} {

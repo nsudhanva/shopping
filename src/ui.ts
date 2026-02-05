@@ -4,6 +4,7 @@ import { elements } from "./elements";
 export type ListHandlers = {
   onSelectList: (listId: string) => void;
   onRenameList: (list: ListDoc) => void;
+  onMoveList: (listId: string, direction: "up" | "down") => void;
 };
 
 export type ItemHandlers = {
@@ -13,6 +14,7 @@ export type ItemHandlers = {
   onEditSave: (itemId: string) => void;
   onEditCancel: () => void;
   onDelete: (itemId: string) => void;
+  onMoveItem: (itemId: string, direction: "up" | "down") => void;
 };
 
 function resolveUserLabel(
@@ -56,7 +58,9 @@ export function setAuthUi(state: State) {
 
 export function renderLists(state: State, handlers: ListHandlers) {
   elements.lists.innerHTML = "";
-  state.lists.forEach((list) => {
+  state.lists.forEach((list, index) => {
+    const isFirst = index === 0;
+    const isLast = index === state.lists.length - 1;
     const li = document.createElement("li");
     const button = document.createElement("button");
     button.type = "button";
@@ -74,6 +78,33 @@ export function renderLists(state: State, handlers: ListHandlers) {
     });
     li.appendChild(button);
 
+    const actions = document.createElement("div");
+    actions.className = "list-actions";
+
+    const moveUpBtn = document.createElement("button");
+    moveUpBtn.type = "button";
+    moveUpBtn.className = "secondary reorder-btn";
+    moveUpBtn.textContent = "↑";
+    moveUpBtn.title = "Move up";
+    moveUpBtn.setAttribute("aria-label", "Move list up");
+    moveUpBtn.disabled = !state.user || isFirst;
+    moveUpBtn.addEventListener("click", () => {
+      if (!state.user || isFirst) return;
+      handlers.onMoveList(list.id, "up");
+    });
+
+    const moveDownBtn = document.createElement("button");
+    moveDownBtn.type = "button";
+    moveDownBtn.className = "secondary reorder-btn";
+    moveDownBtn.textContent = "↓";
+    moveDownBtn.title = "Move down";
+    moveDownBtn.setAttribute("aria-label", "Move list down");
+    moveDownBtn.disabled = !state.user || isLast;
+    moveDownBtn.addEventListener("click", () => {
+      if (!state.user || isLast) return;
+      handlers.onMoveList(list.id, "down");
+    });
+
     const renameBtn = document.createElement("button");
     renameBtn.type = "button";
     renameBtn.className = "secondary";
@@ -84,7 +115,10 @@ export function renderLists(state: State, handlers: ListHandlers) {
       handlers.onRenameList(list);
     });
 
-    li.appendChild(renameBtn);
+    actions.appendChild(moveUpBtn);
+    actions.appendChild(moveDownBtn);
+    actions.appendChild(renameBtn);
+    li.appendChild(actions);
     elements.lists.appendChild(li);
   });
 
@@ -128,7 +162,9 @@ export function renderItems(state: State, handlers: ItemHandlers) {
     return;
   }
 
-  state.items.forEach((item) => {
+  state.items.forEach((item, index) => {
+    const isFirst = index === 0;
+    const isLast = index === state.items.length - 1;
     const li = document.createElement("li");
     const main = document.createElement("div");
     main.className = "item-main";
@@ -207,6 +243,30 @@ export function renderItems(state: State, handlers: ItemHandlers) {
       actions.appendChild(saveBtn);
       actions.appendChild(cancelBtn);
     } else {
+      const moveUpBtn = document.createElement("button");
+      moveUpBtn.type = "button";
+      moveUpBtn.className = "secondary reorder-btn";
+      moveUpBtn.textContent = "↑";
+      moveUpBtn.title = "Move up";
+      moveUpBtn.setAttribute("aria-label", "Move item up");
+      moveUpBtn.disabled = !state.user || isFirst;
+      moveUpBtn.addEventListener("click", () => {
+        if (!state.user || isFirst) return;
+        handlers.onMoveItem(item.id, "up");
+      });
+
+      const moveDownBtn = document.createElement("button");
+      moveDownBtn.type = "button";
+      moveDownBtn.className = "secondary reorder-btn";
+      moveDownBtn.textContent = "↓";
+      moveDownBtn.title = "Move down";
+      moveDownBtn.setAttribute("aria-label", "Move item down");
+      moveDownBtn.disabled = !state.user || isLast;
+      moveDownBtn.addEventListener("click", () => {
+        if (!state.user || isLast) return;
+        handlers.onMoveItem(item.id, "down");
+      });
+
       const editBtn = document.createElement("button");
       editBtn.type = "button";
       editBtn.className = "secondary";
@@ -227,6 +287,8 @@ export function renderItems(state: State, handlers: ItemHandlers) {
         handlers.onDelete(item.id);
       });
 
+      actions.appendChild(moveUpBtn);
+      actions.appendChild(moveDownBtn);
       actions.appendChild(editBtn);
       actions.appendChild(deleteBtn);
     }

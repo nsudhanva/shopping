@@ -7,6 +7,8 @@ export type ListDoc = {
   createdByName?: string;
   updatedByName?: string;
   isDefault: boolean;
+  order: number;
+  orderMissing?: boolean;
 };
 
 export type ItemDoc = {
@@ -18,6 +20,8 @@ export type ItemDoc = {
   createdBy: string;
   createdByName?: string;
   updatedByName?: string;
+  order: number;
+  orderMissing?: boolean;
 };
 
 export type State = {
@@ -29,4 +33,6 @@ export type State = {
   ensureDefaultInFlight: boolean;
   editingItemId: string | null;
   editingItemText: string;
+  backfillListsInFlight: boolean;
+  backfilledItemLists: Set<string>;
 };

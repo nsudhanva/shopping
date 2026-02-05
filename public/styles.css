@@ -124,7 +124,20 @@ body {
   align-items: center;
 }
 
-.sidebar nav button {
+.list-actions {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.reorder-btn {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+  line-height: 1;
+  min-width: 2rem;
+}
+
+.sidebar nav li > button {
   width: 100%;
   text-align: left;
   background: transparent;
@@ -134,19 +147,23 @@ body {
   color: var(--ink);
 }
 
-.sidebar nav li > button.secondary {
+.list-actions button {
+  width: auto;
+}
+
+.list-actions button.secondary:not(.reorder-btn) {
   width: auto;
   padding: 0.4rem 0.6rem;
   font-size: 0.75rem;
 }
 
-.sidebar nav button.active {
+.sidebar nav li > button.active {
   background: var(--surface-2);
   border-color: var(--border);
   font-weight: 600;
 }
 
-.sidebar nav button small {
+.sidebar nav li > button small {
   display: block;
   color: var(--muted);
 }
@@ -262,6 +279,7 @@ body {
 .item-actions {
   display: flex;
   gap: 0.4rem;
+  flex-wrap: wrap;
 }
 
 .hidden {
