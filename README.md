@@ -19,6 +19,17 @@ Fast, shared shopping lists built with Bun + TypeScript + Firebase (PicoCSS).
 - Firebase Hosting + Firestore (Native mode)
 - Firebase Auth (Google)
 
+## Project Structure
+- `public/index.html`: Static shell and layout.
+- `public/styles.css`: Theme + responsive styling.
+- `public/assets/`: Build output (generated).
+- `src/main.ts`: App orchestration, state wiring, auth, and handlers.
+- `src/firestore.ts`: Firestore reads/writes, ordering, backfills.
+- `src/ui.ts`: DOM rendering and UI event helpers.
+- `src/firebase.ts`: Firebase SDK initialization.
+- `firestore.rules`: Firestore security rules.
+- `firebase.json`: Firebase Hosting + Firestore config.
+
 ## Setup
 1. Install dependencies.
 
@@ -90,3 +101,6 @@ On push to `main`, the workflow deploys to Firebase Hosting.
 
 Required repo secrets:
 - `FIREBASE_SERVICE_ACCOUNT_SUDHANVA_PERSONAL` (JSON service account)
+
+## Review
+Line-by-line review completed on February 5, 2026.

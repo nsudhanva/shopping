@@ -226,9 +226,9 @@ export function renderItems(state: State, handlers: ItemHandlers) {
       input.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();
-        handlers.onEditSave(item.id);
-      }
-    });
+          handlers.onEditSave(item.id);
+        }
+      });
       row.appendChild(input);
     } else {
       const text = document.createElement("span");
