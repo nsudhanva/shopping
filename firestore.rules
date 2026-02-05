@@ -13,46 +13,94 @@ service cloud.firestore {
       return val is timestamp;
     }
 
+    function hasKey(data, key) {
+      return data.keys().hasAny([key]);
+    }
+
+    function optionalString(data, key, minLen, maxLen) {
+      return !hasKey(data, key) || isString(data[key], minLen, maxLen);
+    }
+
     function isValidListCreate(data) {
-      return data.keys().hasOnly(["name", "createdAt", "updatedAt", "createdBy", "isDefault"]) &&
+      return data.keys().hasOnly([
+          "name",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "createdByName",
+          "updatedByName",
+          "isDefault"
+        ]) &&
         isString(data.name, 1, 60) &&
         data.isDefault is bool &&
         isTimestamp(data.createdAt) &&
         isTimestamp(data.updatedAt) &&
         isString(data.createdBy, 1, 128) &&
-        data.createdBy == request.auth.uid;
+        data.createdBy == request.auth.uid &&
+        optionalString(data, "createdByName", 1, 128) &&
+        optionalString(data, "updatedByName", 1, 128);
     }
 
     function isValidListUpdate(resourceData, newData) {
-      return newData.keys().hasOnly(["name", "createdAt", "updatedAt", "createdBy", "isDefault"]) &&
+      return newData.keys().hasOnly([
+          "name",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "createdByName",
+          "updatedByName",
+          "isDefault"
+        ]) &&
         isString(newData.name, 1, 60) &&
         newData.isDefault is bool &&
         isTimestamp(newData.createdAt) &&
         isTimestamp(newData.updatedAt) &&
         isString(newData.createdBy, 1, 128) &&
         newData.createdBy == resourceData.createdBy &&
-        newData.createdAt == resourceData.createdAt;
+        newData.createdAt == resourceData.createdAt &&
+        optionalString(newData, "createdByName", 1, 128) &&
+        optionalString(newData, "updatedByName", 1, 128);
     }
 
     function isValidItemCreate(data) {
-      return data.keys().hasOnly(["text", "checked", "createdAt", "updatedAt", "createdBy"]) &&
+      return data.keys().hasOnly([
+          "text",
+          "checked",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "createdByName",
+          "updatedByName"
+        ]) &&
         isString(data.text, 1, 120) &&
         data.checked is bool &&
         isTimestamp(data.createdAt) &&
         isTimestamp(data.updatedAt) &&
         isString(data.createdBy, 1, 128) &&
-        data.createdBy == request.auth.uid;
+        data.createdBy == request.auth.uid &&
+        optionalString(data, "createdByName", 1, 128) &&
+        optionalString(data, "updatedByName", 1, 128);
     }
 
     function isValidItemUpdate(resourceData, newData) {
-      return newData.keys().hasOnly(["text", "checked", "createdAt", "updatedAt", "createdBy"]) &&
+      return newData.keys().hasOnly([
+          "text",
+          "checked",
+          "createdAt",
+          "updatedAt",
+          "createdBy",
+          "createdByName",
+          "updatedByName"
+        ]) &&
         isString(newData.text, 1, 120) &&
         newData.checked is bool &&
         isTimestamp(newData.createdAt) &&
         isTimestamp(newData.updatedAt) &&
         isString(newData.createdBy, 1, 128) &&
         newData.createdBy == resourceData.createdBy &&
-        newData.createdAt == resourceData.createdAt;
+        newData.createdAt == resourceData.createdAt &&
+        optionalString(newData, "createdByName", 1, 128) &&
+        optionalString(newData, "updatedByName", 1, 128);
     }
 
     match /lists/{listId} {

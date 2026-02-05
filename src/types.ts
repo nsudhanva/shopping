@@ -4,6 +4,8 @@ export type ListDoc = {
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
+  createdByName?: string;
+  updatedByName?: string;
   isDefault: boolean;
 };
 
@@ -14,6 +16,8 @@ export type ItemDoc = {
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
+  createdByName?: string;
+  updatedByName?: string;
 };
 
 export type State = {

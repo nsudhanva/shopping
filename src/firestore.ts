@@ -34,6 +34,8 @@ function mapList(snapshot: QuerySnapshot<DocumentData>): ListDoc[] {
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
       createdBy: String(data.createdBy ?? ""),
+      createdByName: data.createdByName ? String(data.createdByName) : undefined,
+      updatedByName: data.updatedByName ? String(data.updatedByName) : undefined,
       isDefault: Boolean(data.isDefault),
     } satisfies ListDoc;
   });
@@ -49,6 +51,8 @@ function mapItems(snapshot: QuerySnapshot<DocumentData>): ItemDoc[] {
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
       createdBy: String(data.createdBy ?? ""),
+      createdByName: data.createdByName ? String(data.createdByName) : undefined,
+      updatedByName: data.updatedByName ? String(data.updatedByName) : undefined,
     } satisfies ItemDoc;
   });
 }
@@ -76,6 +80,7 @@ export function subscribeItems(
 export async function createList(params: {
   name: string;
   userId: string;
+  userName: string;
   isDefault: boolean;
 }): Promise<string> {
   const ref = await addDoc(listCollection, {
@@ -83,21 +88,25 @@ export async function createList(params: {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     createdBy: params.userId,
+    createdByName: params.userName,
+    updatedByName: params.userName,
     isDefault: params.isDefault,
   });
   return ref.id;
 }
 
-export async function updateList(listId: string, data: { name?: string }) {
+export async function updateList(listId: string, data: { name: string; userName: string }) {
   await updateDoc(doc(db, "lists", listId), {
-    ...data,
+    name: data.name,
+    updatedByName: data.userName,
     updatedAt: serverTimestamp(),
   });
 }
 
-export async function touchList(listId: string) {
+export async function touchList(listId: string, userName: string) {
   await updateDoc(doc(db, "lists", listId), {
     updatedAt: serverTimestamp(),
+    updatedByName: userName,
   });
 }
 
@@ -105,6 +114,7 @@ export async function createItem(params: {
   listId: string;
   text: string;
   userId: string;
+  userName: string;
 }) {
   await addDoc(collection(db, "lists", params.listId, "items"), {
     text: params.text,
@@ -112,25 +122,35 @@ export async function createItem(params: {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     createdBy: params.userId,
+    createdByName: params.userName,
+    updatedByName: params.userName,
   });
-  await touchList(params.listId);
+  await touchList(params.listId, params.userName);
 }
 
 export async function updateItem(
   listId: string,
   itemId: string,
-  data: { text?: string; checked?: boolean }
+  data: { text?: string; checked?: boolean; userName: string }
 ) {
-  await updateDoc(doc(db, "lists", listId, "items", itemId), {
-    ...data,
+  const payload: {
+    text?: string;
+    checked?: boolean;
+    updatedByName: string;
+    updatedAt: ReturnType<typeof serverTimestamp>;
+  } = {
+    updatedByName: data.userName,
     updatedAt: serverTimestamp(),
-  });
-  await touchList(listId);
+  };
+  if (data.text !== undefined) payload.text = data.text;
+  if (data.checked !== undefined) payload.checked = data.checked;
+  await updateDoc(doc(db, "lists", listId, "items", itemId), payload);
+  await touchList(listId, data.userName);
 }
 
-export async function deleteItem(listId: string, itemId: string) {
+export async function deleteItem(listId: string, itemId: string, userName: string) {
   await deleteDoc(doc(db, "lists", listId, "items", itemId));
-  await touchList(listId);
+  await touchList(listId, userName);
 }
 
 export function chunkDocs<T>(items: T[], size: number): T[][] {
@@ -141,7 +161,7 @@ export function chunkDocs<T>(items: T[], size: number): T[][] {
   return result;
 }
 
-export async function updateAllItems(listId: string, checked: boolean) {
+export async function updateAllItems(listId: string, checked: boolean, userName: string) {
   const itemsSnap = await getDocs(collection(db, "lists", listId, "items"));
   const batches = chunkDocs(itemsSnap.docs, 400);
   for (const batchDocs of batches) {
@@ -150,14 +170,15 @@ export async function updateAllItems(listId: string, checked: boolean) {
       batch.update(item.ref, {
         checked,
         updatedAt: serverTimestamp(),
+        updatedByName: userName,
       });
     }
     await batch.commit();
   }
-  await touchList(listId);
+  await touchList(listId, userName);
 }
 
-export async function clearAllItems(listId: string) {
+export async function clearAllItems(listId: string, userName: string) {
   const itemsSnap = await getDocs(collection(db, "lists", listId, "items"));
   const batches = chunkDocs(itemsSnap.docs, 400);
   for (const batchDocs of batches) {
@@ -167,10 +188,10 @@ export async function clearAllItems(listId: string) {
     }
     await batch.commit();
   }
-  await touchList(listId);
+  await touchList(listId, userName);
 }
 
-export async function clearCheckedItems(listId: string) {
+export async function clearCheckedItems(listId: string, userName: string) {
   const itemsSnap = await getDocs(collection(db, "lists", listId, "items"));
   const checkedDocs = itemsSnap.docs.filter((docSnap) => Boolean(docSnap.data().checked));
   const batches = chunkDocs(checkedDocs, 400);
@@ -181,15 +202,21 @@ export async function clearCheckedItems(listId: string) {
     }
     await batch.commit();
   }
-  await touchList(listId);
+  await touchList(listId, userName);
 }
 
 export async function ensureDefaultListId(params: {
   existingId?: string;
   userId: string;
+  userName: string;
 }): Promise<string> {
   if (params.existingId) return params.existingId;
-  return createList({ name: "Inbox", userId: params.userId, isDefault: true });
+  return createList({
+    name: "Inbox",
+    userId: params.userId,
+    userName: params.userName,
+    isDefault: true,
+  });
 }
 
 export async function deleteListWithItems(params: {
@@ -197,11 +224,16 @@ export async function deleteListWithItems(params: {
   keepItems: boolean;
   defaultListId?: string;
   userId: string;
+  userName: string;
 }) {
   const itemsSnap = await getDocs(collection(db, "lists", params.listId, "items"));
   const itemDocs = itemsSnap.docs;
   const defaultListId = params.keepItems
-    ? await ensureDefaultListId({ existingId: params.defaultListId, userId: params.userId })
+    ? await ensureDefaultListId({
+        existingId: params.defaultListId,
+        userId: params.userId,
+        userName: params.userName,
+      })
     : null;
 
   const batches = chunkDocs(itemDocs, 400);
@@ -217,6 +249,8 @@ export async function deleteListWithItems(params: {
           createdAt: data.createdAt ?? serverTimestamp(),
           updatedAt: serverTimestamp(),
           createdBy: params.userId,
+          createdByName: params.userName,
+          updatedByName: params.userName,
         });
       }
       batch.delete(item.ref);

@@ -25,6 +25,18 @@ import {
 import { renderItems, renderLists, resetRenameForm, setAuthUi } from "./ui";
 
 let unsubscribeItems: (() => void) | null = null;
+const themeKey = "shopping-theme";
+
+function getUserLabel(): string {
+  if (!state.user) return "Someone";
+  return state.user.displayName ?? state.user.email ?? "Someone";
+}
+
+function applyTheme(theme: "dark" | "light") {
+  document.documentElement.setAttribute("data-theme", theme);
+  elements.themeToggle.textContent = theme === "dark" ? "Light mode" : "Dark mode";
+  elements.themeToggle.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+}
 
 function setActiveList(listId: string | null) {
   state.currentListId = listId;
@@ -64,7 +76,7 @@ function maybeEnsureDefaultList() {
   if (!state.user || !state.listsLoaded || state.ensureDefaultInFlight) return;
   if (state.lists.some((list) => list.isDefault)) return;
   state.ensureDefaultInFlight = true;
-  void ensureDefaultListId({ userId: state.user.uid }).finally(() => {
+  void ensureDefaultListId({ userId: state.user.uid, userName: getUserLabel() }).finally(() => {
     state.ensureDefaultInFlight = false;
   });
 }
@@ -84,7 +96,7 @@ const listHandlers = {
 const itemHandlers = {
   onToggle: async (itemId: string, checked: boolean) => {
     if (!state.user || !state.currentListId) return;
-    await updateItem(state.currentListId, itemId, { checked });
+    await updateItem(state.currentListId, itemId, { checked, userName: getUserLabel() });
   },
   onEditStart: (item: { id: string; text: string }) => {
     state.editingItemId = item.id;
@@ -98,7 +110,7 @@ const itemHandlers = {
     if (!state.user || !state.currentListId) return;
     const text = state.editingItemText.trim();
     if (!text) return;
-    await updateItem(state.currentListId, itemId, { text });
+    await updateItem(state.currentListId, itemId, { text, userName: getUserLabel() });
     state.editingItemId = null;
     state.editingItemText = "";
     renderItems(state, itemHandlers);
@@ -110,7 +122,7 @@ const itemHandlers = {
   },
   onDelete: async (itemId: string) => {
     if (!state.user || !state.currentListId) return;
-    await deleteItem(state.currentListId, itemId);
+    await deleteItem(state.currentListId, itemId, getUserLabel());
   },
 };
 
@@ -166,7 +178,7 @@ elements.newListForm.addEventListener("submit", async (event) => {
   const name = elements.newListInput.value.trim();
   if (!name) return;
 
-  await createList({ name, userId: state.user.uid, isDefault: false });
+  await createList({ name, userId: state.user.uid, userName: getUserLabel(), isDefault: false });
 
   elements.newListForm.reset();
   elements.newListForm.classList.add("hidden");
@@ -191,7 +203,7 @@ elements.editListForm.addEventListener("submit", async (event) => {
   if (!state.user || !state.currentListId) return;
   const name = elements.editListInput.value.trim();
   if (!name) return;
-  await updateList(state.currentListId, { name });
+  await updateList(state.currentListId, { name, userName: getUserLabel() });
   elements.editListForm.classList.add("hidden");
 });
 
@@ -200,7 +212,7 @@ elements.renameListForm.addEventListener("submit", async (event) => {
   if (!state.user || !state.currentListId) return;
   const name = elements.renameListInput.value.trim();
   if (!name) return;
-  await updateList(state.currentListId, { name });
+  await updateList(state.currentListId, { name, userName: getUserLabel() });
   resetRenameForm();
 });
 
@@ -214,7 +226,12 @@ elements.newItemForm.addEventListener("submit", async (event) => {
   const text = elements.newItemInput.value.trim();
   if (!text) return;
 
-  await createItem({ listId: state.currentListId, text, userId: state.user.uid });
+  await createItem({
+    listId: state.currentListId,
+    text,
+    userId: state.user.uid,
+    userName: getUserLabel(),
+  });
   elements.newItemForm.reset();
 });
 
@@ -246,6 +263,7 @@ elements.confirmDeleteBtn.addEventListener("click", async () => {
       keepItems,
       defaultListId: state.lists.find((list) => list.isDefault)?.id,
       userId: state.user.uid,
+      userName: getUserLabel(),
     });
   } finally {
     elements.confirmDeleteBtn.disabled = false;
@@ -255,24 +273,34 @@ elements.confirmDeleteBtn.addEventListener("click", async () => {
 
 elements.checkAllBtn.addEventListener("click", async () => {
   if (!state.user || !state.currentListId) return;
-  await updateAllItems(state.currentListId, true);
+  await updateAllItems(state.currentListId, true, getUserLabel());
 });
 
 elements.uncheckAllBtn.addEventListener("click", async () => {
   if (!state.user || !state.currentListId) return;
-  await updateAllItems(state.currentListId, false);
+  await updateAllItems(state.currentListId, false, getUserLabel());
 });
 
 elements.clearCheckedBtn.addEventListener("click", async () => {
   if (!state.user || !state.currentListId) return;
   if (!confirm("Clear checked items from this list?")) return;
-  await clearCheckedItems(state.currentListId);
+  await clearCheckedItems(state.currentListId, getUserLabel());
 });
 
 elements.clearAllBtn.addEventListener("click", async () => {
   if (!state.user || !state.currentListId) return;
   if (!confirm("Clear all items from this list?")) return;
-  await clearAllItems(state.currentListId);
+  await clearAllItems(state.currentListId, getUserLabel());
+});
+
+const storedTheme = (localStorage.getItem(themeKey) as "dark" | "light" | null) ?? "dark";
+applyTheme(storedTheme);
+
+elements.themeToggle.addEventListener("click", () => {
+  const current = (document.documentElement.getAttribute("data-theme") as "dark" | "light") ?? "dark";
+  const next = current === "dark" ? "light" : "dark";
+  localStorage.setItem(themeKey, next);
+  applyTheme(next);
 });
 
 setAuthUi(state);

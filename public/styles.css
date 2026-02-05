@@ -1,14 +1,40 @@
 :root {
-  --brand: #0b3d2e;
-  --brand-light: #0f6146;
-  --accent: #ffb454;
-  --surface: #f7f4ef;
-  --ink: #10261f;
+  color-scheme: dark;
+  --bg: #0f1310;
+  --surface: #161b17;
+  --surface-2: #1f2521;
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #f3f5f2;
+  --muted: rgba(243, 245, 242, 0.6);
+  --brand: #58d39d;
+  --brand-strong: #36b07b;
+  --accent: #f6b26b;
+  --danger: #ff7a6e;
+  --danger-strong: #d84b45;
+  --shadow: 0 24px 48px rgba(7, 9, 8, 0.6);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f2ea;
+  --surface: #ffffff;
+  --surface-2: #f3efe6;
+  --border: rgba(16, 38, 31, 0.12);
+  --text: #101b17;
+  --muted: rgba(16, 27, 23, 0.6);
+  --brand: #117a57;
+  --brand-strong: #0e5f44;
+  --accent: #d98d3c;
+  --danger: #d45750;
+  --danger-strong: #b33b36;
+  --shadow: 0 24px 48px rgba(16, 27, 23, 0.12);
 }
 
 body {
-  background: linear-gradient(120deg, #f1efe9 0%, #f9f7f2 35%, #f2f6f1 100%);
-  color: var(--ink);
+  background: radial-gradient(circle at top right, rgba(88, 211, 157, 0.1), transparent 35%),
+    radial-gradient(circle at top left, rgba(246, 178, 107, 0.08), transparent 40%),
+    var(--bg);
+  color: var(--text);
   min-height: 100vh;
 }
 
@@ -32,7 +58,7 @@ body {
   height: 42px;
   border-radius: 14px;
   background: var(--brand);
-  color: #fff;
+  color: #0b1b14;
   font-weight: 700;
   font-size: 1.2rem;
   letter-spacing: 0.08em;
@@ -45,7 +71,7 @@ body {
 
 .brand-subtitle {
   font-size: 0.8rem;
-  color: rgba(16, 38, 31, 0.6);
+  color: var(--muted);
 }
 
 .auth {
@@ -56,7 +82,7 @@ body {
 
 .auth-meta {
   font-size: 0.8rem;
-  color: rgba(16, 38, 31, 0.6);
+  color: var(--muted);
 }
 
 .app {
@@ -67,10 +93,10 @@ body {
 }
 
 .sidebar {
-  background: #fff;
+  background: var(--surface);
   border-radius: 18px;
   padding: 1rem;
-  box-shadow: 0 20px 40px rgba(16, 38, 31, 0.08);
+  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -115,14 +141,14 @@ body {
 }
 
 .sidebar nav button.active {
-  background: var(--surface);
-  border-color: rgba(16, 38, 31, 0.1);
+  background: var(--surface-2);
+  border-color: var(--border);
   font-weight: 600;
 }
 
 .sidebar nav button small {
   display: block;
-  color: rgba(16, 38, 31, 0.6);
+  color: var(--muted);
 }
 
 .sidebar-actions {
@@ -135,10 +161,10 @@ body {
 }
 
 .content {
-  background: #fff;
+  background: var(--surface);
   border-radius: 22px;
   padding: 1.5rem 1.75rem 2rem;
-  box-shadow: 0 20px 40px rgba(16, 38, 31, 0.08);
+  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -177,7 +203,7 @@ body {
 }
 
 .subtitle {
-  color: rgba(16, 38, 31, 0.6);
+  color: var(--muted);
   margin: 0.25rem 0 0;
 }
 
@@ -196,7 +222,7 @@ body {
 
 .items li {
   list-style: none;
-  border: 1px solid rgba(16, 38, 31, 0.1);
+  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 0.75rem 0.9rem;
   display: flex;
@@ -207,9 +233,21 @@ body {
 
 .item-main {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.75rem;
   flex: 1;
+}
+
+.item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+}
+
+.item-meta {
+  font-size: 0.75rem;
+  color: var(--muted);
 }
 
 .item-edit-input {
@@ -218,7 +256,7 @@ body {
 
 .item-text.checked {
   text-decoration: line-through;
-  color: rgba(16, 38, 31, 0.4);
+  color: var(--muted);
 }
 
 .item-actions {
@@ -231,8 +269,49 @@ body {
 }
 
 .danger {
-  border-color: rgba(156, 26, 26, 0.2);
-  color: #8b1f1f;
+  border-color: var(--danger-strong);
+  color: var(--danger-strong);
+}
+
+button,
+[type="button"],
+[type="submit"] {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #0b1b14;
+}
+
+button.secondary,
+[type="button"].secondary,
+[type="submit"].secondary {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+button.danger,
+[type="button"].danger,
+[type="submit"].danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #1b0b0b;
+}
+
+button:disabled,
+[type="button"]:disabled,
+[type="submit"]:disabled {
+  opacity: 0.5;
+  color: var(--muted);
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+
+input,
+select,
+textarea {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text);
 }
 
 @media (max-width: 900px) {

@@ -5,6 +5,7 @@ export const elements = {
   signOutBtn: qs<HTMLButtonElement>("#sign-out-btn"),
   authMeta: qs<HTMLDivElement>("#auth-meta"),
   authHint: qs<HTMLElement>("#auth-hint"),
+  themeToggle: qs<HTMLButtonElement>("#theme-toggle"),
   lists: qs<HTMLUListElement>("#lists"),
   newListBtn: qs<HTMLButtonElement>("#new-list-btn"),
   newListForm: qs<HTMLFormElement>("#new-list-form"),

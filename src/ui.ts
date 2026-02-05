@@ -15,6 +15,15 @@ export type ItemHandlers = {
   onDelete: (itemId: string) => void;
 };
 
+function resolveUserLabel(
+  name: string | undefined,
+  id: string | undefined,
+  currentUserId: string | null
+) {
+  if (id && currentUserId && id === currentUserId) return "you";
+  return name || "someone";
+}
+
 export function setEditingEnabled(enabled: boolean) {
   elements.newListBtn.disabled = !enabled;
   elements.newListInput.disabled = !enabled;
@@ -82,9 +91,18 @@ export function renderLists(state: State, handlers: ListHandlers) {
   const active = state.lists.find((list) => list.id === state.currentListId) ?? null;
   const canDelete = Boolean(active && state.user);
   elements.activeListTitle.textContent = active?.name ?? "No list selected";
-  elements.activeListSubtitle.textContent = active
-    ? `${state.items.length} item${state.items.length === 1 ? "" : "s"}`
-    : "";
+  if (active) {
+    const countLabel = `${state.items.length} item${state.items.length === 1 ? "" : "s"}`;
+    const createdBy = resolveUserLabel(active.createdByName, active.createdBy, state.user?.uid ?? null);
+    const updatedBy = resolveUserLabel(
+      active.updatedByName ?? active.createdByName,
+      undefined,
+      state.user?.uid ?? null
+    );
+    elements.activeListSubtitle.textContent = `${countLabel} · Created by ${createdBy} · Edited by ${updatedBy}`;
+  } else {
+    elements.activeListSubtitle.textContent = "";
+  }
   elements.deleteListBtn.disabled = !canDelete;
   elements.editListBtn.disabled = !active || !state.user;
   elements.checkAllBtn.disabled = !active || !state.user || state.items.length === 0;
@@ -127,6 +145,9 @@ export function renderItems(state: State, handlers: ItemHandlers) {
 
     main.appendChild(checkbox);
 
+    const content = document.createElement("div");
+    content.className = "item-content";
+
     if (state.editingItemId === item.id) {
       const input = document.createElement("input");
       input.className = "item-edit-input";
@@ -142,13 +163,26 @@ export function renderItems(state: State, handlers: ItemHandlers) {
           handlers.onEditSave(item.id);
         }
       });
-      main.appendChild(input);
+      content.appendChild(input);
     } else {
       const text = document.createElement("span");
       text.className = "item-text" + (item.checked ? " checked" : "");
       text.textContent = item.text;
-      main.appendChild(text);
+      content.appendChild(text);
     }
+
+    const createdBy = resolveUserLabel(item.createdByName, item.createdBy, state.user?.uid ?? null);
+    const updatedBy = resolveUserLabel(
+      item.updatedByName ?? item.createdByName,
+      undefined,
+      state.user?.uid ?? null
+    );
+    const meta = document.createElement("small");
+    meta.className = "item-meta";
+    meta.textContent = `Created by ${createdBy} · Edited by ${updatedBy}`;
+    content.appendChild(meta);
+
+    main.appendChild(content);
 
     const actions = document.createElement("div");
     actions.className = "item-actions";
