@@ -89,7 +89,7 @@ function subscribeToItems() {
     if (
       state.user &&
       state.currentListId &&
-      state.items.some((item) => item.orderMissing) &&
+      state.items.some((item) => item.orderMissing || item.quantityMissing) &&
       !state.backfilledItemLists.has(state.currentListId)
     ) {
       state.backfilledItemLists.add(state.currentListId);
@@ -188,6 +188,10 @@ const itemHandlers = {
   onDelete: async (itemId: string) => {
     if (!state.user || !state.currentListId) return;
     await deleteItem(state.currentListId, itemId, getUserLabel());
+  },
+  onQuantityChange: async (itemId: string, quantity: number) => {
+    if (!state.user || !state.currentListId) return;
+    await updateItem(state.currentListId, itemId, { quantity, userName: getUserLabel() });
   },
   onMoveItem: async (itemId: string, direction: "up" | "down") => {
     if (!state.user || !state.currentListId) return;

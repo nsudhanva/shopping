@@ -15,6 +15,7 @@ export type ItemDoc = {
   id: string;
   text: string;
   checked: boolean;
+  quantity: number;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
@@ -22,6 +23,7 @@ export type ItemDoc = {
   updatedByName?: string;
   order: number;
   orderMissing?: boolean;
+  quantityMissing?: boolean;
 };
 
 export type State = {

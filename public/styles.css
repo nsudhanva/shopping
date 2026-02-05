@@ -128,6 +128,7 @@ body {
   display: flex;
   gap: 0.35rem;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .reorder-btn {
@@ -138,7 +139,8 @@ body {
 }
 
 .sidebar nav li > button {
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   text-align: left;
   background: transparent;
   border: 1px solid transparent;
@@ -262,6 +264,18 @@ body {
   flex: 1;
 }
 
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.item-qty {
+  width: 4.5rem;
+  text-align: center;
+}
+
 .item-meta {
   font-size: 0.75rem;
   color: var(--muted);
@@ -269,6 +283,11 @@ body {
 
 .item-edit-input {
   flex: 1;
+}
+
+.item-text {
+  flex: 1;
+  min-width: 0;
 }
 
 .item-text.checked {

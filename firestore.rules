@@ -78,6 +78,7 @@ service cloud.firestore {
       return data.keys().hasOnly([
           "text",
           "checked",
+          "quantity",
           "createdAt",
           "updatedAt",
           "createdBy",
@@ -87,6 +88,7 @@ service cloud.firestore {
         ]) &&
         isString(data.text, 1, 120) &&
         data.checked is bool &&
+        isNumber(data.quantity) &&
         isTimestamp(data.createdAt) &&
         isTimestamp(data.updatedAt) &&
         isString(data.createdBy, 1, 128) &&
@@ -100,6 +102,7 @@ service cloud.firestore {
       return newData.keys().hasOnly([
           "text",
           "checked",
+          "quantity",
           "createdAt",
           "updatedAt",
           "createdBy",
@@ -109,6 +112,7 @@ service cloud.firestore {
         ]) &&
         isString(newData.text, 1, 120) &&
         newData.checked is bool &&
+        optionalNumber(newData, "quantity") &&
         isTimestamp(newData.createdAt) &&
         isTimestamp(newData.updatedAt) &&
         isString(newData.createdBy, 1, 128) &&

@@ -40,6 +40,13 @@ function resolveOrder(data: DocumentData): { order: number; missing: boolean } {
   return { order: toDate(data.createdAt).getTime(), missing: true };
 }
 
+function resolveQuantity(data: DocumentData): { quantity: number; missing: boolean } {
+  if (isFiniteNumber(data.quantity)) {
+    return { quantity: data.quantity, missing: false };
+  }
+  return { quantity: 1, missing: true };
+}
+
 function mapList(snapshot: QuerySnapshot<DocumentData>): ListDoc[] {
   return snapshot.docs.map((docSnap) => {
     const data = docSnap.data();
@@ -63,10 +70,12 @@ function mapItems(snapshot: QuerySnapshot<DocumentData>): ItemDoc[] {
   return snapshot.docs.map((docSnap) => {
     const data = docSnap.data();
     const { order, missing } = resolveOrder(data);
+    const { quantity, missing: quantityMissing } = resolveQuantity(data);
     return {
       id: docSnap.id,
       text: String(data.text ?? ""),
       checked: Boolean(data.checked),
+      quantity,
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
       createdBy: String(data.createdBy ?? ""),
@@ -74,6 +83,7 @@ function mapItems(snapshot: QuerySnapshot<DocumentData>): ItemDoc[] {
       updatedByName: data.updatedByName ? String(data.updatedByName) : undefined,
       order,
       orderMissing: missing,
+      quantityMissing,
     } satisfies ItemDoc;
   });
 }
@@ -141,6 +151,7 @@ export async function createItem(params: {
   await addDoc(collection(db, "lists", params.listId, "items"), {
     text: params.text,
     checked: false,
+    quantity: 1,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     createdBy: params.userId,
@@ -154,11 +165,12 @@ export async function createItem(params: {
 export async function updateItem(
   listId: string,
   itemId: string,
-  data: { text?: string; checked?: boolean; userName: string }
+  data: { text?: string; checked?: boolean; quantity?: number; userName: string }
 ) {
   const payload: {
     text?: string;
     checked?: boolean;
+    quantity?: number;
     updatedByName: string;
     updatedAt: ReturnType<typeof serverTimestamp>;
   } = {
@@ -167,6 +179,7 @@ export async function updateItem(
   };
   if (data.text !== undefined) payload.text = data.text;
   if (data.checked !== undefined) payload.checked = data.checked;
+  if (data.quantity !== undefined) payload.quantity = data.quantity;
   await updateDoc(doc(db, "lists", listId, "items", itemId), payload);
   await touchList(listId, data.userName);
 }
@@ -269,9 +282,11 @@ export async function deleteListWithItems(params: {
         const order = isFiniteNumber(data.order)
           ? data.order
           : toDate(data.createdAt).getTime();
+        const quantity = isFiniteNumber(data.quantity) ? data.quantity : 1;
         batch.set(targetRef, {
           text: String(data.text ?? ""),
           checked: Boolean(data.checked),
+          quantity,
           createdAt: data.createdAt ?? serverTimestamp(),
           updatedAt: serverTimestamp(),
           createdBy: params.userId,
@@ -332,16 +347,18 @@ export async function backfillItemOrder(listId: string, userName: string) {
         ref: docSnap.ref,
         createdAt: toDate(data.createdAt),
         order: isFiniteNumber(data.order) ? data.order : null,
+        quantity: isFiniteNumber(data.quantity) ? data.quantity : null,
       };
     })
-    .filter((entry) => entry.order === null);
+    .filter((entry) => entry.order === null || entry.quantity === null);
 
   if (missing.length === 0) return;
 
   missing.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   const updates = missing.map((entry, index) => ({
     ref: entry.ref,
-    order: entry.createdAt.getTime() + index,
+    order: entry.order ?? entry.createdAt.getTime() + index,
+    quantity: entry.quantity ?? 1,
   }));
 
   const batches = chunkDocs(updates, 400);
@@ -350,6 +367,7 @@ export async function backfillItemOrder(listId: string, userName: string) {
     for (const entry of batchDocs) {
       batch.update(entry.ref, {
         order: entry.order,
+        quantity: entry.quantity,
         updatedAt: serverTimestamp(),
         updatedByName: userName,
       });

@@ -14,6 +14,7 @@ export type ItemHandlers = {
   onEditSave: (itemId: string) => void;
   onEditCancel: () => void;
   onDelete: (itemId: string) => void;
+  onQuantityChange: (itemId: string, quantity: number) => void;
   onMoveItem: (itemId: string, direction: "up" | "down") => void;
 };
 
@@ -184,6 +185,35 @@ export function renderItems(state: State, handlers: ItemHandlers) {
     const content = document.createElement("div");
     content.className = "item-content";
 
+    const row = document.createElement("div");
+    row.className = "item-row";
+
+    const qtyInput = document.createElement("input");
+    qtyInput.type = "number";
+    qtyInput.inputMode = "decimal";
+    qtyInput.step = "any";
+    qtyInput.className = "item-qty";
+    qtyInput.value = String(item.quantity);
+    qtyInput.title = "Quantity";
+    qtyInput.setAttribute("aria-label", "Quantity");
+    qtyInput.disabled = !state.user;
+    qtyInput.addEventListener("change", () => {
+      if (!state.user) return;
+      const parsed = Number.parseFloat(qtyInput.value);
+      if (!Number.isFinite(parsed)) {
+        qtyInput.value = String(item.quantity);
+        return;
+      }
+      handlers.onQuantityChange(item.id, parsed);
+    });
+    qtyInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        qtyInput.blur();
+      }
+    });
+    row.appendChild(qtyInput);
+
     if (state.editingItemId === item.id) {
       const input = document.createElement("input");
       input.className = "item-edit-input";
@@ -196,16 +226,18 @@ export function renderItems(state: State, handlers: ItemHandlers) {
       input.addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
           event.preventDefault();
-          handlers.onEditSave(item.id);
-        }
-      });
-      content.appendChild(input);
+        handlers.onEditSave(item.id);
+      }
+    });
+      row.appendChild(input);
     } else {
       const text = document.createElement("span");
       text.className = "item-text" + (item.checked ? " checked" : "");
       text.textContent = item.text;
-      content.appendChild(text);
+      row.appendChild(text);
     }
+
+    content.appendChild(row);
 
     const createdBy = resolveUserLabel(item.createdByName, item.createdBy, state.user?.uid ?? null);
     const updatedBy = resolveUserLabel(
