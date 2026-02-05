@@ -144,7 +144,7 @@ body {
   border: 1px solid transparent;
   padding: 0.65rem 0.8rem;
   border-radius: 12px;
-  color: var(--ink);
+  color: var(--text);
 }
 
 .list-actions button {

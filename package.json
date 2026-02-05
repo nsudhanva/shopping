@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "bun build src/main.ts --outdir public/assets --target browser --format=esm --splitting --minify",
-    "serve": "bun run scripts/serve.ts",
+    "serve": "bunx serve public",
     "dev": "bun run build && bun run serve",
     "dns:cloudflare": "bun scripts/cloudflare-dns.mjs",
     "deploy": "bunx firebase-tools deploy",

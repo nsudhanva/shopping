@@ -2,9 +2,14 @@
 Fast, shared shopping lists built with Bun + TypeScript + Firebase (PicoCSS).
 
 ## Features
-- Shared lists (groups) with items
-- Public read, Google-auth write
+- Shared lists with items (public read, Google-auth write)
+- Add, edit, check/uncheck, delete items
+- Check all / Uncheck all / Clear checked / Clear all
+- Rename lists (header + sidebar)
 - Delete lists with choice to delete items or move them to Inbox
+- Reorder lists and items
+- Created/edited-by metadata for lists and items
+- Dark mode default with light mode toggle
 - Responsive layout with left nav
 
 ## Tech
@@ -26,10 +31,19 @@ bun install
 bun run build
 ```
 
-3. Run locally.
+3. Serve locally.
 
 ```bash
 bun run serve
+```
+
+Open the URL printed by the server (typically `http://localhost:3000`).
+
+### Dev loop
+Rebuild and serve:
+
+```bash
+bun run dev
 ```
 
 ## Firebase
@@ -53,28 +67,22 @@ bunx firebase-tools hosting:sites:create sudhanva-shopping-app
 ```
 
 4. Enable Google provider in Firebase Auth Console.
+5. Add your domains to Firebase Auth -> Settings -> Authorized domains.
 
-5. Deploy rules and hosting.
+6. Deploy rules and hosting.
 
 ```bash
 bunx firebase-tools deploy
 ```
 
 ## Firestore Rules
-Rules live in `firestore.rules`. Reads are public. Writes require auth and a strict schema.
+Rules live in `firestore.rules`. Reads are public. Writes require auth and a strict schema (including `order` for sorting).
 
-## Cloudflare DNS
-This repo includes a script to upsert the CNAME record for your Firebase Hosting site. Use environment variables only.
-
-```bash
-export CLOUDFLARE_API_TOKEN=...
-export CLOUDFLARE_ZONE_ID=...
-export CLOUDFLARE_RECORD_NAME=shopping.sudhanva.me
-export CLOUDFLARE_RECORD_TARGET=YOUR_FIREBASE_HOSTING_TARGET
-export CLOUDFLARE_PROXIED=false
-
-bun run dns:cloudflare
-```
+## Cloudflare DNS (Optional)
+Point your custom domain to Firebase Hosting:
+- CNAME `shopping.sudhanva.me` -> `sudhanva-shopping-app.web.app`
+- Add the TXT record Firebase gives you for domain ownership verification
+Then wait for SSL provisioning to complete.
 
 ## GitHub Actions Deploy
 On push to `main`, the workflow deploys to Firebase Hosting.
