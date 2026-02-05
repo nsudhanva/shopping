@@ -4,7 +4,8 @@ Fast, shared shopping lists built with Bun + TypeScript + Firebase (PicoCSS).
 ## Features
 - Shared lists with items (public read, Google-auth write)
 - Add, edit, check/uncheck, delete items
-- Inline quantity per item (decimal, defaults to 1)
+- Inline quantity per item (decimal, defaults to 1) with +/- controls
+- Optional unit per item (e.g., kg, lb)
 - Check all / Uncheck all / Clear checked / Clear all
 - Rename lists (header + sidebar)
 - Delete lists with choice to delete items or move them to Inbox

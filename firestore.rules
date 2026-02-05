@@ -79,6 +79,7 @@ service cloud.firestore {
           "text",
           "checked",
           "quantity",
+          "unit",
           "createdAt",
           "updatedAt",
           "createdBy",
@@ -89,6 +90,7 @@ service cloud.firestore {
         isString(data.text, 1, 120) &&
         data.checked is bool &&
         isNumber(data.quantity) &&
+        optionalString(data, "unit", 0, 16) &&
         isTimestamp(data.createdAt) &&
         isTimestamp(data.updatedAt) &&
         isString(data.createdBy, 1, 128) &&
@@ -103,6 +105,7 @@ service cloud.firestore {
           "text",
           "checked",
           "quantity",
+          "unit",
           "createdAt",
           "updatedAt",
           "createdBy",
@@ -113,6 +116,7 @@ service cloud.firestore {
         isString(newData.text, 1, 120) &&
         newData.checked is bool &&
         optionalNumber(newData, "quantity") &&
+        optionalString(newData, "unit", 0, 16) &&
         isTimestamp(newData.createdAt) &&
         isTimestamp(newData.updatedAt) &&
         isString(newData.createdBy, 1, 128) &&

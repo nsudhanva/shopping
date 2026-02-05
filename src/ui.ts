@@ -15,6 +15,7 @@ export type ItemHandlers = {
   onEditCancel: () => void;
   onDelete: (itemId: string) => void;
   onQuantityChange: (itemId: string, quantity: number) => void;
+  onUnitChange: (itemId: string, unit: string) => void;
   onMoveItem: (itemId: string, direction: "up" | "down") => void;
 };
 
@@ -188,6 +189,21 @@ export function renderItems(state: State, handlers: ItemHandlers) {
     const row = document.createElement("div");
     row.className = "item-row";
 
+    const qtyGroup = document.createElement("div");
+    qtyGroup.className = "item-qty-group";
+
+    const decBtn = document.createElement("button");
+    decBtn.type = "button";
+    decBtn.className = "secondary qty-btn";
+    decBtn.textContent = "−";
+    decBtn.title = "Decrease quantity";
+    decBtn.setAttribute("aria-label", "Decrease quantity");
+    decBtn.disabled = !state.user;
+    decBtn.addEventListener("click", () => {
+      if (!state.user) return;
+      handlers.onQuantityChange(item.id, item.quantity - 1);
+    });
+
     const qtyInput = document.createElement("input");
     qtyInput.type = "number";
     qtyInput.inputMode = "decimal";
@@ -212,7 +228,44 @@ export function renderItems(state: State, handlers: ItemHandlers) {
         qtyInput.blur();
       }
     });
-    row.appendChild(qtyInput);
+
+    const incBtn = document.createElement("button");
+    incBtn.type = "button";
+    incBtn.className = "secondary qty-btn";
+    incBtn.textContent = "+";
+    incBtn.title = "Increase quantity";
+    incBtn.setAttribute("aria-label", "Increase quantity");
+    incBtn.disabled = !state.user;
+    incBtn.addEventListener("click", () => {
+      if (!state.user) return;
+      handlers.onQuantityChange(item.id, item.quantity + 1);
+    });
+
+    const unitInput = document.createElement("input");
+    unitInput.type = "text";
+    unitInput.className = "item-unit";
+    unitInput.placeholder = "unit";
+    unitInput.maxLength = 12;
+    unitInput.value = item.unit;
+    unitInput.title = "Unit";
+    unitInput.setAttribute("aria-label", "Unit");
+    unitInput.disabled = !state.user;
+    unitInput.addEventListener("change", () => {
+      if (!state.user) return;
+      handlers.onUnitChange(item.id, unitInput.value.trim());
+    });
+    unitInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        unitInput.blur();
+      }
+    });
+
+    qtyGroup.appendChild(decBtn);
+    qtyGroup.appendChild(qtyInput);
+    qtyGroup.appendChild(incBtn);
+    qtyGroup.appendChild(unitInput);
+    row.appendChild(qtyGroup);
 
     if (state.editingItemId === item.id) {
       const input = document.createElement("input");

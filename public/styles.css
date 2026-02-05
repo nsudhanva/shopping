@@ -274,9 +274,25 @@ body {
   flex-wrap: wrap;
 }
 
+.item-qty-group {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.qty-btn {
+  padding: 0.25rem 0.55rem;
+  min-width: 2rem;
+}
+
 .item-qty {
   width: 4.5rem;
   text-align: center;
+}
+
+.item-unit {
+  width: 4.5rem;
 }
 
 .item-meta {

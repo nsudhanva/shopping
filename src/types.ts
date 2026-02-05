@@ -16,6 +16,7 @@ export type ItemDoc = {
   text: string;
   checked: boolean;
   quantity: number;
+  unit: string;
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;

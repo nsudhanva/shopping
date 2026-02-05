@@ -47,6 +47,10 @@ function resolveQuantity(data: DocumentData): { quantity: number; missing: boole
   return { quantity: 1, missing: true };
 }
 
+function resolveUnit(data: DocumentData): string {
+  return typeof data.unit === "string" ? data.unit : "";
+}
+
 function mapList(snapshot: QuerySnapshot<DocumentData>): ListDoc[] {
   return snapshot.docs.map((docSnap) => {
     const data = docSnap.data();
@@ -71,11 +75,13 @@ function mapItems(snapshot: QuerySnapshot<DocumentData>): ItemDoc[] {
     const data = docSnap.data();
     const { order, missing } = resolveOrder(data);
     const { quantity, missing: quantityMissing } = resolveQuantity(data);
+    const unit = resolveUnit(data);
     return {
       id: docSnap.id,
       text: String(data.text ?? ""),
       checked: Boolean(data.checked),
       quantity,
+      unit,
       createdAt: toDate(data.createdAt),
       updatedAt: toDate(data.updatedAt),
       createdBy: String(data.createdBy ?? ""),
@@ -152,6 +158,7 @@ export async function createItem(params: {
     text: params.text,
     checked: false,
     quantity: 1,
+    unit: "",
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     createdBy: params.userId,
@@ -165,12 +172,13 @@ export async function createItem(params: {
 export async function updateItem(
   listId: string,
   itemId: string,
-  data: { text?: string; checked?: boolean; quantity?: number; userName: string }
+  data: { text?: string; checked?: boolean; quantity?: number; unit?: string; userName: string }
 ) {
   const payload: {
     text?: string;
     checked?: boolean;
     quantity?: number;
+    unit?: string;
     updatedByName: string;
     updatedAt: ReturnType<typeof serverTimestamp>;
   } = {
@@ -180,6 +188,7 @@ export async function updateItem(
   if (data.text !== undefined) payload.text = data.text;
   if (data.checked !== undefined) payload.checked = data.checked;
   if (data.quantity !== undefined) payload.quantity = data.quantity;
+  if (data.unit !== undefined) payload.unit = data.unit;
   await updateDoc(doc(db, "lists", listId, "items", itemId), payload);
   await touchList(listId, data.userName);
 }
@@ -283,10 +292,12 @@ export async function deleteListWithItems(params: {
           ? data.order
           : toDate(data.createdAt).getTime();
         const quantity = isFiniteNumber(data.quantity) ? data.quantity : 1;
+        const unit = typeof data.unit === "string" ? data.unit : "";
         batch.set(targetRef, {
           text: String(data.text ?? ""),
           checked: Boolean(data.checked),
           quantity,
+          unit,
           createdAt: data.createdAt ?? serverTimestamp(),
           updatedAt: serverTimestamp(),
           createdBy: params.userId,

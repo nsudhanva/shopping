@@ -193,6 +193,10 @@ const itemHandlers = {
     if (!state.user || !state.currentListId) return;
     await updateItem(state.currentListId, itemId, { quantity, userName: getUserLabel() });
   },
+  onUnitChange: async (itemId: string, unit: string) => {
+    if (!state.user || !state.currentListId) return;
+    await updateItem(state.currentListId, itemId, { unit, userName: getUserLabel() });
+  },
   onMoveItem: async (itemId: string, direction: "up" | "down") => {
     if (!state.user || !state.currentListId) return;
     const index = state.items.findIndex((item) => item.id === itemId);
