@@ -14,10 +14,50 @@ export type ItemHandlers = {
   onEditSave: (itemId: string) => void;
   onEditCancel: () => void;
   onDelete: (itemId: string) => void;
+  onLongDelete: (itemId: string) => void;
   onQuantityChange: (itemId: string, quantity: number) => void;
   onUnitChange: (itemId: string, unit: string) => void;
   onMoveItem: (itemId: string, direction: "up" | "down") => void;
 };
+
+function isMobileViewport() {
+  return window.matchMedia("(max-width: 900px)").matches;
+}
+
+function bindTapAndLongPress(element: HTMLElement, onTap: () => void, onLongPress: () => void) {
+  let holdTimer: number | null = null;
+  let longPressTriggered = false;
+
+  const clearHold = () => {
+    if (holdTimer !== null) {
+      window.clearTimeout(holdTimer);
+      holdTimer = null;
+    }
+  };
+
+  element.addEventListener("pointerdown", (event) => {
+    if (!isMobileViewport() || event.pointerType === "mouse") return;
+    clearHold();
+    longPressTriggered = false;
+    holdTimer = window.setTimeout(() => {
+      longPressTriggered = true;
+      onLongPress();
+    }, 520);
+  });
+
+  element.addEventListener("pointerup", clearHold);
+  element.addEventListener("pointercancel", clearHold);
+  element.addEventListener("pointerleave", clearHold);
+
+  element.addEventListener("click", (event) => {
+    if (longPressTriggered) {
+      event.preventDefault();
+      longPressTriggered = false;
+      return;
+    }
+    onTap();
+  });
+}
 
 function resolveUserLabel(
   name: string | undefined,
@@ -261,12 +301,6 @@ export function renderItems(state: State, handlers: ItemHandlers) {
       }
     });
 
-    qtyGroup.appendChild(decBtn);
-    qtyGroup.appendChild(qtyInput);
-    qtyGroup.appendChild(incBtn);
-    qtyGroup.appendChild(unitInput);
-    row.appendChild(qtyGroup);
-
     if (state.editingItemId === item.id) {
       const input = document.createElement("input");
       input.className = "item-edit-input";
@@ -284,11 +318,35 @@ export function renderItems(state: State, handlers: ItemHandlers) {
       });
       row.appendChild(input);
     } else {
-      const text = document.createElement("span");
-      text.className = "item-text" + (item.checked ? " checked" : "");
-      text.textContent = item.text;
-      row.appendChild(text);
+      if (state.user) {
+        const textButton = document.createElement("button");
+        textButton.type = "button";
+        textButton.className = "item-title-btn" + (item.checked ? " checked" : "");
+        textButton.textContent = item.text;
+        textButton.setAttribute("aria-label", `Edit ${item.text}`);
+        bindTapAndLongPress(
+          textButton,
+          () => {
+            handlers.onEditStart(item);
+          },
+          () => {
+            handlers.onLongDelete(item.id);
+          }
+        );
+        row.appendChild(textButton);
+      } else {
+        const text = document.createElement("span");
+        text.className = "item-text" + (item.checked ? " checked" : "");
+        text.textContent = item.text;
+        row.appendChild(text);
+      }
     }
+
+    qtyGroup.appendChild(decBtn);
+    qtyGroup.appendChild(qtyInput);
+    qtyGroup.appendChild(incBtn);
+    qtyGroup.appendChild(unitInput);
+    row.appendChild(qtyGroup);
 
     content.appendChild(row);
 
@@ -354,7 +412,7 @@ export function renderItems(state: State, handlers: ItemHandlers) {
 
       const editBtn = document.createElement("button");
       editBtn.type = "button";
-      editBtn.className = "secondary";
+      editBtn.className = "secondary edit-action";
       editBtn.textContent = "Edit";
       editBtn.disabled = !state.user;
       editBtn.addEventListener("click", () => {
@@ -364,7 +422,7 @@ export function renderItems(state: State, handlers: ItemHandlers) {
 
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
-      deleteBtn.className = "secondary";
+      deleteBtn.className = "secondary delete-action";
       deleteBtn.textContent = "Delete";
       deleteBtn.disabled = !state.user;
       deleteBtn.addEventListener("click", () => {

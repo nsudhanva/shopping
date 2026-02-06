@@ -7,7 +7,6 @@
     "build": "bun build src/main.ts --outdir public/assets --target browser --format=esm --splitting --minify",
     "serve": "bunx serve public",
     "dev": "bun run build && bun run serve",
-    "dns:cloudflare": "bun scripts/cloudflare-dns.mjs",
     "deploy": "bunx firebase-tools deploy",
     "deploy:hosting": "bunx firebase-tools deploy --only hosting",
     "deploy:firestore": "bunx firebase-tools deploy --only firestore"

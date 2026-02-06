@@ -211,6 +211,13 @@ const itemHandlers = {
     if (!state.user || !state.currentListId) return;
     await deleteItem(state.currentListId, itemId, getUserLabel());
   },
+  onLongDelete: async (itemId: string) => {
+    if (!state.user || !state.currentListId) return;
+    const item = state.items.find((entry) => entry.id === itemId);
+    const itemLabel = item?.text ? ` "${item.text}"` : "";
+    if (!confirm(`Delete${itemLabel}?`)) return;
+    await deleteItem(state.currentListId, itemId, getUserLabel());
+  },
   onQuantityChange: async (itemId: string, quantity: number) => {
     if (!state.user || !state.currentListId) return;
     await updateItem(state.currentListId, itemId, { quantity, userName: getUserLabel() });
