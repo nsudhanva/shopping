@@ -22,6 +22,19 @@ Fast, shared shopping lists built with Bun + TypeScript + Firebase (PicoCSS).
 - Firebase Hosting + Firestore (Native mode)
 - Firebase Auth (Google)
 
+## Best Practices Used
+- Keep runtime minimal: no frontend framework, no extra UI library, no client state library.
+- Keep bundle lean: build with Bun, ship one small ESM bundle, avoid unnecessary dependencies.
+- Use CSS-first behavior when possible: mobile Lists drawer uses CSS-only toggle, not JavaScript.
+- Keep JS focused on app state and data: TypeScript modules separate orchestration, rendering, Firebase setup, and Firestore data operations.
+- Preserve UX state cheaply: selected list persists with `localStorage` and safe fallback logic.
+- Optimize Firestore access patterns: realtime subscriptions per active scope, batch writes for bulk operations.
+- Enforce data integrity in security rules: strict field allowlists and type validation in `firestore.rules`.
+- Keep auth boundaries clear: reads are public, writes require authenticated users.
+- Follow accessible markup: semantic HTML, labeled controls, keyboard-friendly form/input behavior, explicit ARIA labels where needed.
+- Use Pico design tokens for responsive tuning: mobile density and spacing rely on Pico CSS variables first, then local overrides.
+- Keep secrets out of git: only public Firebase web config is client-side; credentials stay in environment variables and GitHub secrets.
+
 ## Project Structure
 - `public/index.html`: Static shell and layout.
 - `public/styles.css`: Theme + responsive styling.
