@@ -12,6 +12,8 @@ Fast, shared shopping lists built with Bun + TypeScript + Firebase (PicoCSS).
 - Reorder lists and items
 - Created/edited-by metadata for lists and items
 - Dark mode default with light mode toggle
+- Mobile hamburger drawer for Lists (CSS-only)
+- Remembers the last selected list across tab closes
 - Responsive layout with left nav
 
 ## Tech

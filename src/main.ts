@@ -30,6 +30,27 @@ import { renderItems, renderLists, resetRenameForm, setAuthUi } from "./ui";
 
 let unsubscribeItems: (() => void) | null = null;
 const themeKey = "shopping-theme";
+const selectedListKey = "shopping-selected-list-id";
+
+function readStoredListId(): string | null {
+  try {
+    return localStorage.getItem(selectedListKey);
+  } catch {
+    return null;
+  }
+}
+
+function storeSelectedListId(listId: string | null) {
+  try {
+    if (!listId) {
+      localStorage.removeItem(selectedListKey);
+      return;
+    }
+    localStorage.setItem(selectedListKey, listId);
+  } catch {
+    // Ignore storage failures (private browsing, blocked storage, etc.).
+  }
+}
 
 function getUserLabel(): string {
   if (!state.user) return "Someone";
@@ -59,6 +80,7 @@ function swapOrders(
 
 function setActiveList(listId: string | null) {
   state.currentListId = listId;
+  storeSelectedListId(listId);
   state.items = [];
   state.editingItemId = null;
   state.editingItemText = "";
@@ -231,7 +253,11 @@ subscribeLists((lists) => {
   state.listsLoaded = true;
 
   if (!state.currentListId) {
-    const defaultList = state.lists.find((list) => list.isDefault) ?? state.lists[0];
+    const storedListId = readStoredListId();
+    const restoredList = storedListId
+      ? state.lists.find((list) => list.id === storedListId)
+      : undefined;
+    const defaultList = restoredList ?? state.lists.find((list) => list.isDefault) ?? state.lists[0];
     setActiveList(defaultList?.id ?? null);
   } else if (!state.lists.find((list) => list.id === state.currentListId)) {
     const fallback = state.lists.find((list) => list.isDefault) ?? state.lists[0];

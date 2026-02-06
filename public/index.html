@@ -9,12 +9,25 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <input id="lists-drawer-toggle" class="drawer-toggle" type="checkbox" aria-hidden="true" />
+
     <header class="topbar">
-      <div class="brand">
-        <span class="brand-mark">S</span>
-        <div>
-          <div class="brand-title">shopping</div>
-          <div class="brand-subtitle">Shared lists, lightning fast</div>
+      <div class="topbar-left">
+        <label
+          for="lists-drawer-toggle"
+          class="secondary drawer-button"
+          aria-controls="lists-sidebar"
+          aria-label="Toggle lists"
+        >
+          <span class="drawer-icon" aria-hidden="true"></span>
+          <span>Lists</span>
+        </label>
+        <div class="brand">
+          <span class="brand-mark">S</span>
+          <div>
+            <div class="brand-title">shopping</div>
+            <div class="brand-subtitle">Shared lists, lightning fast</div>
+          </div>
         </div>
       </div>
       <div class="auth">
@@ -26,10 +39,15 @@
     </header>
 
     <div class="app">
-      <aside class="sidebar">
+      <aside class="sidebar" id="lists-sidebar">
         <div class="sidebar-header">
           <h3>Lists</h3>
-          <button id="new-list-btn" class="secondary" aria-label="Add list">+ New</button>
+          <div class="sidebar-header-actions">
+            <button id="new-list-btn" class="secondary" aria-label="Add list">+ New</button>
+            <label for="lists-drawer-toggle" class="secondary drawer-close" aria-label="Close lists">
+              Close
+            </label>
+          </div>
         </div>
         <form id="new-list-form" class="hidden">
           <input id="new-list-input" type="text" name="name" placeholder="List name" maxlength="60" required />
@@ -90,6 +108,7 @@
         </section>
       </main>
     </div>
+    <label for="lists-drawer-toggle" class="drawer-backdrop" aria-hidden="true"></label>
 
     <dialog id="delete-list-dialog">
       <article>
