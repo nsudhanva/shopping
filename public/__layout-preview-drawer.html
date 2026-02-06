@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Layout Preview</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <input id="lists-drawer-toggle" class="drawer-toggle" type="checkbox" checked />
+
+    <header class="topbar">
+      <div class="topbar-left">
+        <label for="lists-drawer-toggle" class="secondary drawer-button" aria-label="Toggle lists">
+          <span class="drawer-icon" aria-hidden="true"></span>
+          <span>Lists</span>
+        </label>
+        <div class="brand">
+          <span class="brand-mark">S</span>
+          <div>
+            <div class="brand-title">shopping</div>
+            <div class="brand-subtitle">Shared lists, lightning fast</div>
+          </div>
+        </div>
+      </div>
+      <div class="auth">
+        <button class="secondary">Light mode</button>
+        <button>Sign out</button>
+        <div id="auth-meta" class="auth-meta">Sudhanva Narayana</div>
+      </div>
+    </header>
+
+    <div class="app">
+      <aside class="sidebar" id="lists-sidebar">
+        <div class="sidebar-header">
+          <h3>Lists</h3>
+          <div class="sidebar-header-actions">
+            <button id="new-list-btn" class="secondary">+ New</button>
+            <label for="lists-drawer-toggle" class="secondary drawer-close">Close</label>
+          </div>
+        </div>
+
+        <nav>
+          <ul id="lists">
+            <li>
+              <button type="button" class="active">Groceries<small>Default</small></button>
+              <div class="list-actions">
+                <button type="button" class="secondary reorder-btn">↑</button>
+                <button type="button" class="secondary reorder-btn">↓</button>
+                <button type="button" class="secondary">Rename</button>
+              </div>
+            </li>
+            <li>
+              <button type="button">Costco run</button>
+              <div class="list-actions">
+                <button type="button" class="secondary reorder-btn">↑</button>
+                <button type="button" class="secondary reorder-btn">↓</button>
+                <button type="button" class="secondary">Rename</button>
+              </div>
+            </li>
+            <li>
+              <button type="button">Hello</button>
+              <div class="list-actions">
+                <button type="button" class="secondary reorder-btn">↑</button>
+                <button type="button" class="secondary reorder-btn">↓</button>
+                <button type="button" class="secondary">Rename</button>
+              </div>
+            </li>
+          </ul>
+        </nav>
+
+        <div class="sidebar-footer">
+          <small id="auth-hint">Signed in to edit.</small>
+        </div>
+      </aside>
+
+      <main class="content">
+        <section class="content-header">
+          <div class="list-meta">
+            <div class="list-title">
+              <h2 id="active-list-title">Groceries</h2>
+              <button id="edit-list-btn" class="secondary">Rename</button>
+            </div>
+            <p id="active-list-subtitle" class="subtitle">2 items · Created by Maanasa Narayan · Edited by Sudhanva Narayana</p>
+          </div>
+          <div class="content-actions">
+            <button id="check-all-btn" class="secondary">Check all</button>
+            <button id="uncheck-all-btn" class="secondary">Uncheck all</button>
+            <button id="clear-checked-btn" class="secondary danger">Clear checked</button>
+            <button id="clear-all-btn" class="secondary danger">Clear all</button>
+            <button id="delete-list-btn" class="secondary danger">Delete list</button>
+          </div>
+        </section>
+
+        <section class="composer">
+          <form>
+            <input type="text" placeholder="Add an item" value="" />
+            <button type="button">Add</button>
+          </form>
+        </section>
+
+        <section class="items">
+          <ul id="items">
+            <li>
+              <div class="item-main">
+                <input type="checkbox" />
+                <div class="item-content">
+                  <div class="item-row">
+                    <button type="button" class="item-title-btn">Tomatos</button>
+                    <div class="item-qty-group">
+                      <button type="button" class="secondary qty-btn">−</button>
+                      <input class="item-qty" type="number" value="1" />
+                      <button type="button" class="secondary qty-btn">+</button>
+                      <input class="item-unit" type="text" value="unit" />
+                    </div>
+                  </div>
+                  <small class="item-meta">Created by Maanasa Narayan · Edited by Maanasa Narayan</small>
+                </div>
+              </div>
+              <div class="item-actions">
+                <button type="button" class="secondary reorder-btn">↑</button>
+                <button type="button" class="secondary reorder-btn">↓</button>
+                <button type="button" class="secondary edit-action">Edit</button>
+                <button type="button" class="secondary delete-action">Delete</button>
+              </div>
+            </li>
+            <li>
+              <div class="item-main">
+                <input type="checkbox" />
+                <div class="item-content">
+                  <div class="item-row">
+                    <button type="button" class="item-title-btn">Potato</button>
+                    <div class="item-qty-group">
+                      <button type="button" class="secondary qty-btn">−</button>
+                      <input class="item-qty" type="number" value="3" />
+                      <button type="button" class="secondary qty-btn">+</button>
+                      <input class="item-unit" type="text" value="unit" />
+                    </div>
+                  </div>
+                  <small class="item-meta">Created by you · Edited by Sudhanva Narayana</small>
+                </div>
+              </div>
+              <div class="item-actions">
+                <button type="button" class="secondary reorder-btn">↑</button>
+                <button type="button" class="secondary reorder-btn">↓</button>
+                <button type="button" class="secondary edit-action">Edit</button>
+                <button type="button" class="secondary delete-action">Delete</button>
+              </div>
+            </li>
+          </ul>
+        </section>
+      </main>
+    </div>
+
+    <label for="lists-drawer-toggle" class="drawer-backdrop"></label>
+  </body>
+</html>
