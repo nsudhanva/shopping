@@ -340,9 +340,8 @@ export function renderItems(state: State, handlers: ItemHandlers) {
     qtyJoin.appendChild(decBtn);
     qtyJoin.appendChild(qtyInput);
     qtyJoin.appendChild(incBtn);
-    topRow.appendChild(qtyJoin);
 
-    // Unit input (AFTER quantity)
+    // Unit input
     const unitInput = document.createElement("input");
     unitInput.type = "text";
     unitInput.className = "input input-sm input-bordered w-20";
@@ -360,7 +359,6 @@ export function renderItems(state: State, handlers: ItemHandlers) {
         unitInput.blur();
       }
     });
-    topRow.appendChild(unitInput);
 
     content.appendChild(topRow);
 
@@ -437,6 +435,8 @@ export function renderItems(state: State, handlers: ItemHandlers) {
         handlers.onDelete(item.id);
       });
 
+      actions.appendChild(qtyJoin);
+      actions.appendChild(unitInput);
       actions.appendChild(moveUpBtn);
       actions.appendChild(moveDownBtn);
       actions.appendChild(editBtn);
