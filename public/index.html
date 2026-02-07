@@ -20,22 +20,19 @@
         </svg>
       </label>
     </div>
-    <div class="flex-1 gap-3">
+    <div class="flex-1 flex items-center gap-3">
       <div class="avatar placeholder">
         <div class="bg-primary text-primary-content rounded-xl w-10">
           <span class="text-lg font-bold">S</span>
         </div>
       </div>
-      <div>
-        <div class="font-bold text-lg">shopping</div>
-        <div class="text-xs text-muted">Shared lists, lightning fast</div>
-      </div>
+      <div class="font-bold text-lg">shopping</div>
     </div>
-    <div class="flex-none gap-2">
-      <button id="theme-toggle" class="btn btn-ghost btn-sm">Light mode</button>
+    <div class="flex-none gap-2 flex items-center">
+      <button id="theme-toggle" class="btn btn-ghost btn-sm hidden sm:inline-flex">Light mode</button>
       <button id="sign-in-btn" class="btn btn-primary btn-sm">Sign in with Google</button>
       <button id="sign-out-btn" class="btn btn-ghost btn-sm hidden">Sign out</button>
-      <span id="auth-meta" class="text-sm text-muted hidden"></span>
+      <span id="auth-meta" class="text-xs text-muted hidden text-right leading-tight max-w-24 sm:max-w-none"></span>
     </div>
   </div>
 

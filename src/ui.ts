@@ -97,9 +97,8 @@ export function renderLists(state: State, handlers: ListHandlers) {
 
     // Main clickable area with content and actions
     const wrapper = document.createElement("div");
-    wrapper.className = `flex items-center justify-between gap-2 w-full rounded-lg px-3 py-2 cursor-pointer transition-colors ${
-      isActive ? "bg-primary/20 text-primary font-semibold" : "hover:bg-base-300"
-    }`;
+    wrapper.className = `flex items-center justify-between gap-2 w-full rounded-lg px-3 py-2 cursor-pointer transition-colors ${isActive ? "bg-primary/20 text-primary font-semibold" : "hover:bg-base-300"
+      }`;
 
     // Content button (name + badge)
     const content = document.createElement("button");
@@ -184,13 +183,18 @@ export function renderLists(state: State, handlers: ListHandlers) {
 
   if (active) {
     const countLabel = `${state.items.length} item${state.items.length === 1 ? "" : "s"}`;
-    const createdBy = resolveUserLabel(active.createdByName, active.createdBy, state.user?.uid ?? null);
-    const updatedBy = resolveUserLabel(
-      active.updatedByName ?? active.createdByName,
-      undefined,
-      state.user?.uid ?? null,
-    );
-    elements.activeListSubtitle.textContent = `${countLabel} · Created by ${createdBy} · Edited by ${updatedBy}`;
+    if (isMobileViewport()) {
+      // On mobile, show only item count to save space
+      elements.activeListSubtitle.textContent = countLabel;
+    } else {
+      const createdBy = resolveUserLabel(active.createdByName, active.createdBy, state.user?.uid ?? null);
+      const updatedBy = resolveUserLabel(
+        active.updatedByName ?? active.createdByName,
+        undefined,
+        state.user?.uid ?? null,
+      );
+      elements.activeListSubtitle.textContent = `${countLabel} · Created by ${createdBy} · Edited by ${updatedBy}`;
+    }
   } else {
     elements.activeListSubtitle.textContent = "";
   }
@@ -224,38 +228,44 @@ export function renderItems(state: State, handlers: ItemHandlers) {
   state.items.forEach((item, index) => {
     const isFirst = index === 0;
     const isLast = index === state.items.length - 1;
+    const isMobile = isMobileViewport();
 
     // Item card
     const li = document.createElement("li");
     li.className = "card card-compact bg-base-200 shadow-sm";
 
     const cardBody = document.createElement("div");
-    cardBody.className = "card-body flex-row items-center gap-4";
+    cardBody.className = "card-body p-3 sm:p-4";
+
+    // Desktop layout
+
+    const row1 = document.createElement("div");
+    row1.className = "hidden sm:flex items-center gap-4";
+
+    // Left column: Checkbox + Content (text + metadata)
+    const desktopLeft = document.createElement("div");
+    desktopLeft.className = "flex items-start gap-4 flex-1 min-w-0";
 
     // Checkbox
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
-    checkbox.className = "checkbox checkbox-primary";
+    checkbox.className = "checkbox checkbox-primary checkbox-md mt-1";
     checkbox.checked = item.checked;
     checkbox.disabled = !state.user;
     checkbox.addEventListener("change", () => {
       if (!state.user) return;
       handlers.onToggle(item.id, checkbox.checked);
     });
-    cardBody.appendChild(checkbox);
+    desktopLeft.appendChild(checkbox);
 
-    // Content area
-    const content = document.createElement("div");
-    content.className = "flex-1 min-w-0";
+    // Content wrapper (text + metadata)
+    const contentWrapper = document.createElement("div");
+    contentWrapper.className = "flex-1 min-w-0";
 
-    // Top row: text + quantity controls + unit (item name comes first)
-    const topRow = document.createElement("div");
-    topRow.className = "flex flex-wrap items-center gap-3";
-
-    // Item text/edit (FIRST)
+    // Item text/edit
     if (state.editingItemId === item.id) {
       const input = document.createElement("input");
-      input.className = "input input-sm input-bordered flex-1 min-w-32";
+      input.className = "input input-sm input-bordered w-full";
       input.type = "text";
       input.maxLength = 120;
       input.value = state.editingItemText;
@@ -268,29 +278,44 @@ export function renderItems(state: State, handlers: ItemHandlers) {
           handlers.onEditSave(item.id);
         }
       });
-      topRow.appendChild(input);
+      contentWrapper.appendChild(input);
       setTimeout(() => input.focus(), 0);
     } else {
       if (state.user) {
         const textButton = document.createElement("button");
         textButton.type = "button";
-        textButton.className = `flex-1 text-left font-medium min-w-32 ${item.checked ? "line-through opacity-50" : ""}`;
+        textButton.className = `text-left font-medium ${item.checked ? "line-through opacity-50" : ""}`;
         textButton.textContent = item.text;
         bindTapAndLongPress(
           textButton,
           () => handlers.onEditStart(item),
           () => handlers.onLongDelete(item.id),
         );
-        topRow.appendChild(textButton);
+        contentWrapper.appendChild(textButton);
       } else {
         const text = document.createElement("span");
-        text.className = `flex-1 min-w-32 ${item.checked ? "line-through opacity-50" : ""}`;
+        text.className = `${item.checked ? "line-through opacity-50" : ""}`;
         text.textContent = item.text;
-        topRow.appendChild(text);
+        contentWrapper.appendChild(text);
       }
     }
 
-    // Quantity controls using daisyUI join (AFTER item name)
+    // Metadata (desktop only)
+    const createdBy = resolveUserLabel(item.createdByName, item.createdBy, state.user?.uid ?? null);
+    const updatedBy = resolveUserLabel(item.updatedByName ?? item.createdByName, undefined, state.user?.uid ?? null);
+    const meta = document.createElement("div");
+    meta.className = "text-xs text-base-content/50 mt-1";
+    meta.textContent = `Created by ${createdBy} · Edited by ${updatedBy}`;
+    contentWrapper.appendChild(meta);
+
+    desktopLeft.appendChild(contentWrapper);
+    row1.appendChild(desktopLeft);
+
+    // Right column: Controls (vertically centered)
+    const desktopRight = document.createElement("div");
+    desktopRight.className = "flex items-center gap-2 flex-shrink-0";
+
+    // Quantity controls
     const qtyJoin = document.createElement("div");
     qtyJoin.className = "join";
 
@@ -340,6 +365,7 @@ export function renderItems(state: State, handlers: ItemHandlers) {
     qtyJoin.appendChild(decBtn);
     qtyJoin.appendChild(qtyInput);
     qtyJoin.appendChild(incBtn);
+    desktopRight.appendChild(qtyJoin);
 
     // Unit input
     const unitInput = document.createElement("input");
@@ -359,23 +385,58 @@ export function renderItems(state: State, handlers: ItemHandlers) {
         unitInput.blur();
       }
     });
+    desktopRight.appendChild(unitInput);
 
-    content.appendChild(topRow);
+    // Move buttons
+    const moveUpBtn = document.createElement("button");
+    moveUpBtn.type = "button";
+    moveUpBtn.className = "btn btn-ghost btn-xs btn-square";
+    moveUpBtn.innerHTML = "↑";
+    moveUpBtn.title = "Move up";
+    moveUpBtn.disabled = !state.user || isFirst;
+    moveUpBtn.addEventListener("click", () => {
+      if (!state.user || isFirst) return;
+      handlers.onMoveItem(item.id, "up");
+    });
+    desktopRight.appendChild(moveUpBtn);
 
-    // Meta info
-    const createdBy = resolveUserLabel(item.createdByName, item.createdBy, state.user?.uid ?? null);
-    const updatedBy = resolveUserLabel(item.updatedByName ?? item.createdByName, undefined, state.user?.uid ?? null);
-    const meta = document.createElement("div");
-    meta.className = "text-xs text-base-content/50 mt-1";
-    meta.textContent = `Created by ${createdBy} · Edited by ${updatedBy}`;
-    content.appendChild(meta);
+    const moveDownBtn = document.createElement("button");
+    moveDownBtn.type = "button";
+    moveDownBtn.className = "btn btn-ghost btn-xs btn-square";
+    moveDownBtn.innerHTML = "↓";
+    moveDownBtn.title = "Move down";
+    moveDownBtn.disabled = !state.user || isLast;
+    moveDownBtn.addEventListener("click", () => {
+      if (!state.user || isLast) return;
+      handlers.onMoveItem(item.id, "down");
+    });
+    desktopRight.appendChild(moveDownBtn);
 
-    cardBody.appendChild(content);
+    // Edit button
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "btn btn-ghost btn-xs";
+    editBtn.textContent = "Edit";
+    editBtn.disabled = !state.user;
+    editBtn.addEventListener("click", () => {
+      if (!state.user) return;
+      handlers.onEditStart(item);
+    });
+    desktopRight.appendChild(editBtn);
 
-    // Actions
-    const actions = document.createElement("div");
-    actions.className = "flex items-center gap-1";
+    // Delete button
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "btn btn-error btn-xs btn-outline";
+    deleteBtn.textContent = "Delete";
+    deleteBtn.disabled = !state.user;
+    deleteBtn.addEventListener("click", () => {
+      if (!state.user) return;
+      handlers.onDelete(item.id);
+    });
+    desktopRight.appendChild(deleteBtn);
 
+    // Editing mode buttons for desktop
     if (state.editingItemId === item.id) {
       const saveBtn = document.createElement("button");
       saveBtn.type = "button";
@@ -383,67 +444,166 @@ export function renderItems(state: State, handlers: ItemHandlers) {
       saveBtn.textContent = "Save";
       saveBtn.disabled = !state.user;
       saveBtn.addEventListener("click", () => handlers.onEditSave(item.id));
+      desktopRight.appendChild(saveBtn);
 
       const cancelBtn = document.createElement("button");
       cancelBtn.type = "button";
       cancelBtn.className = "btn btn-ghost btn-sm";
       cancelBtn.textContent = "Cancel";
       cancelBtn.addEventListener("click", () => handlers.onEditCancel());
+      desktopRight.appendChild(cancelBtn);
+    }
 
-      actions.appendChild(saveBtn);
-      actions.appendChild(cancelBtn);
+    row1.appendChild(desktopRight);
+
+    cardBody.appendChild(row1);
+
+    // Mobile layout
+    const mobileContainer = document.createElement("div");
+    mobileContainer.className = "sm:hidden flex items-center gap-3";
+
+    // Left column: Checkbox + Item text
+    const mobileLeft = document.createElement("div");
+    mobileLeft.className = "flex items-center gap-3 flex-1 min-w-0";
+
+    const mobileCheckbox = document.createElement("input");
+    mobileCheckbox.type = "checkbox";
+    mobileCheckbox.className = "checkbox checkbox-primary checkbox-md flex-shrink-0";
+    mobileCheckbox.checked = item.checked;
+    mobileCheckbox.disabled = !state.user;
+    mobileCheckbox.addEventListener("change", () => {
+      if (!state.user) return;
+      handlers.onToggle(item.id, mobileCheckbox.checked);
+    });
+    mobileLeft.appendChild(mobileCheckbox);
+
+    if (state.editingItemId === item.id) {
+      const mobileInput = document.createElement("input");
+      mobileInput.className = "input input-sm input-bordered flex-1 min-w-0";
+      mobileInput.type = "text";
+      mobileInput.maxLength = 120;
+      mobileInput.value = state.editingItemText;
+      mobileInput.addEventListener("input", () => {
+        handlers.onEditInput(mobileInput.value);
+      });
+      mobileInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handlers.onEditSave(item.id);
+        }
+      });
+      mobileLeft.appendChild(mobileInput);
+      setTimeout(() => mobileInput.focus(), 0);
     } else {
-      const moveUpBtn = document.createElement("button");
-      moveUpBtn.type = "button";
-      moveUpBtn.className = "btn btn-ghost btn-xs btn-square";
-      moveUpBtn.innerHTML = "↑";
-      moveUpBtn.title = "Move up";
-      moveUpBtn.disabled = !state.user || isFirst;
-      moveUpBtn.addEventListener("click", () => {
-        if (!state.user || isFirst) return;
-        handlers.onMoveItem(item.id, "up");
-      });
+      if (state.user) {
+        const mobileTextBtn = document.createElement("button");
+        mobileTextBtn.type = "button";
+        mobileTextBtn.className = `text-base font-medium truncate ${item.checked ? "line-through opacity-50" : ""}`;
+        mobileTextBtn.textContent = item.text;
+        bindTapAndLongPress(
+          mobileTextBtn,
+          () => handlers.onEditStart(item),
+          () => handlers.onLongDelete(item.id),
+        );
+        mobileLeft.appendChild(mobileTextBtn);
+      } else {
+        const mobileText = document.createElement("span");
+        mobileText.className = `text-base truncate ${item.checked ? "line-through opacity-50" : ""}`;
+        mobileText.textContent = item.text;
+        mobileLeft.appendChild(mobileText);
+      }
+    }
 
-      const moveDownBtn = document.createElement("button");
-      moveDownBtn.type = "button";
-      moveDownBtn.className = "btn btn-ghost btn-xs btn-square";
-      moveDownBtn.innerHTML = "↓";
-      moveDownBtn.title = "Move down";
-      moveDownBtn.disabled = !state.user || isLast;
-      moveDownBtn.addEventListener("click", () => {
-        if (!state.user || isLast) return;
-        handlers.onMoveItem(item.id, "down");
-      });
+    // Right column: Controls stacked vertically (centered)
+    const mobileRight = document.createElement("div");
+    mobileRight.className = "flex flex-col items-center gap-1 flex-shrink-0";
 
-      const editBtn = document.createElement("button");
-      editBtn.type = "button";
-      editBtn.className = "btn btn-ghost btn-xs hidden sm:inline-flex";
-      editBtn.textContent = "Edit";
-      editBtn.disabled = !state.user;
-      editBtn.addEventListener("click", () => {
-        if (!state.user) return;
-        handlers.onEditStart(item);
-      });
+    // Quantity controls
+    const mobileQtyJoin = document.createElement("div");
+    mobileQtyJoin.className = "join";
 
-      const deleteBtn = document.createElement("button");
-      deleteBtn.type = "button";
-      deleteBtn.className = "btn btn-error btn-xs btn-outline";
-      deleteBtn.textContent = "Delete";
-      deleteBtn.disabled = !state.user;
-      deleteBtn.addEventListener("click", () => {
+    const mobileDecBtn = document.createElement("button");
+    mobileDecBtn.type = "button";
+    mobileDecBtn.className = "btn btn-xs join-item";
+    mobileDecBtn.textContent = "−";
+    mobileDecBtn.disabled = !state.user;
+    mobileDecBtn.addEventListener("click", () => {
+      if (!state.user) return;
+      handlers.onQuantityChange(item.id, item.quantity - 1);
+    });
+
+    const mobileQtyInput = document.createElement("input");
+    mobileQtyInput.type = "number";
+    mobileQtyInput.inputMode = "decimal";
+    mobileQtyInput.step = "any";
+    mobileQtyInput.className = "input input-xs input-bordered join-item w-10 text-center";
+    mobileQtyInput.value = String(item.quantity);
+    mobileQtyInput.disabled = !state.user;
+    mobileQtyInput.addEventListener("change", () => {
+      if (!state.user) return;
+      const parsed = Number.parseFloat(mobileQtyInput.value);
+      if (!Number.isFinite(parsed)) {
+        mobileQtyInput.value = String(item.quantity);
+        return;
+      }
+      handlers.onQuantityChange(item.id, parsed);
+    });
+
+    const mobileIncBtn = document.createElement("button");
+    mobileIncBtn.type = "button";
+    mobileIncBtn.className = "btn btn-xs join-item";
+    mobileIncBtn.textContent = "+";
+    mobileIncBtn.disabled = !state.user;
+    mobileIncBtn.addEventListener("click", () => {
+      if (!state.user) return;
+      handlers.onQuantityChange(item.id, item.quantity + 1);
+    });
+
+    mobileQtyJoin.appendChild(mobileDecBtn);
+    mobileQtyJoin.appendChild(mobileQtyInput);
+    mobileQtyJoin.appendChild(mobileIncBtn);
+    mobileRight.appendChild(mobileQtyJoin);
+
+    // Delete button (or editing buttons)
+    if (state.editingItemId === item.id) {
+      const mobileEditActions = document.createElement("div");
+      mobileEditActions.className = "flex gap-1";
+
+      const mobileSaveBtn = document.createElement("button");
+      mobileSaveBtn.type = "button";
+      mobileSaveBtn.className = "btn btn-primary btn-xs";
+      mobileSaveBtn.textContent = "Save";
+      mobileSaveBtn.disabled = !state.user;
+      mobileSaveBtn.addEventListener("click", () => handlers.onEditSave(item.id));
+
+      const mobileCancelBtn = document.createElement("button");
+      mobileCancelBtn.type = "button";
+      mobileCancelBtn.className = "btn btn-ghost btn-xs";
+      mobileCancelBtn.textContent = "Cancel";
+      mobileCancelBtn.addEventListener("click", () => handlers.onEditCancel());
+
+      mobileEditActions.appendChild(mobileSaveBtn);
+      mobileEditActions.appendChild(mobileCancelBtn);
+      mobileRight.appendChild(mobileEditActions);
+    } else {
+      const mobileDeleteBtn = document.createElement("button");
+      mobileDeleteBtn.type = "button";
+      mobileDeleteBtn.className = "btn btn-error btn-xs btn-outline";
+      mobileDeleteBtn.textContent = "Delete";
+      mobileDeleteBtn.disabled = !state.user;
+      mobileDeleteBtn.addEventListener("click", () => {
         if (!state.user) return;
         handlers.onDelete(item.id);
       });
-
-      actions.appendChild(qtyJoin);
-      actions.appendChild(unitInput);
-      actions.appendChild(moveUpBtn);
-      actions.appendChild(moveDownBtn);
-      actions.appendChild(editBtn);
-      actions.appendChild(deleteBtn);
+      mobileRight.appendChild(mobileDeleteBtn);
     }
 
-    cardBody.appendChild(actions);
+    mobileContainer.appendChild(mobileLeft);
+    mobileContainer.appendChild(mobileRight);
+    cardBody.appendChild(mobileContainer);
+
+
+
     li.appendChild(cardBody);
     elements.items.appendChild(li);
   });
