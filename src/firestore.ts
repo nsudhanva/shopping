@@ -1,17 +1,17 @@
 import {
   addDoc,
   collection,
+  type DocumentData,
   deleteDoc,
   doc,
   getDocs,
   onSnapshot,
   orderBy,
+  type QuerySnapshot,
   query,
   serverTimestamp,
   updateDoc,
   writeBatch,
-  type QuerySnapshot,
-  type DocumentData,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { ItemDoc, ListDoc } from "./types";
@@ -101,14 +101,8 @@ export function subscribeLists(onChange: (lists: ListDoc[]) => void): () => void
   });
 }
 
-export function subscribeItems(
-  listId: string,
-  onChange: (items: ItemDoc[]) => void
-): () => void {
-  const itemsQuery = query(
-    collection(db, "lists", listId, "items"),
-    orderBy("order", "asc")
-  );
+export function subscribeItems(listId: string, onChange: (items: ItemDoc[]) => void): () => void {
+  const itemsQuery = query(collection(db, "lists", listId, "items"), orderBy("order", "asc"));
   return onSnapshot(itemsQuery, (snapshot) => {
     onChange(mapItems(snapshot));
   });
@@ -148,12 +142,7 @@ export async function touchList(listId: string, userName: string) {
   });
 }
 
-export async function createItem(params: {
-  listId: string;
-  text: string;
-  userId: string;
-  userName: string;
-}) {
+export async function createItem(params: { listId: string; text: string; userId: string; userName: string }) {
   await addDoc(collection(db, "lists", params.listId, "items"), {
     text: params.text,
     checked: false,
@@ -172,7 +161,7 @@ export async function createItem(params: {
 export async function updateItem(
   listId: string,
   itemId: string,
-  data: { text?: string; checked?: boolean; quantity?: number; unit?: string; userName: string }
+  data: { text?: string; checked?: boolean; quantity?: number; unit?: string; userName: string },
 ) {
   const payload: {
     text?: string;
@@ -198,7 +187,7 @@ export async function deleteItem(listId: string, itemId: string, userName: strin
   await touchList(listId, userName);
 }
 
-export function chunkDocs<T>(items: T[], size: number): T[][] {
+function chunkDocs<T>(items: T[], size: number): T[][] {
   const result: T[][] = [];
   for (let i = 0; i < items.length; i += size) {
     result.push(items.slice(i, i + size));
@@ -288,9 +277,7 @@ export async function deleteListWithItems(params: {
       if (params.keepItems && defaultListId) {
         const targetRef = doc(db, "lists", defaultListId, "items", item.id);
         const data = item.data();
-        const order = isFiniteNumber(data.order)
-          ? data.order
-          : toDate(data.createdAt).getTime();
+        const order = isFiniteNumber(data.order) ? data.order : toDate(data.createdAt).getTime();
         const quantity = isFiniteNumber(data.quantity) ? data.quantity : 1;
         const unit = typeof data.unit === "string" ? data.unit : "";
         batch.set(targetRef, {
@@ -400,11 +387,7 @@ export async function persistListOrder(lists: Array<{ id: string; order: number 
   await batch.commit();
 }
 
-export async function persistItemOrder(
-  listId: string,
-  items: Array<{ id: string; order: number }>,
-  userName: string
-) {
+export async function persistItemOrder(listId: string, items: Array<{ id: string; order: number }>, userName: string) {
   const batch = writeBatch(db);
   for (const item of items) {
     batch.update(doc(db, "lists", listId, "items", item.id), {

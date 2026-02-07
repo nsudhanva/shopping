@@ -1,13 +1,6 @@
-import {
-  onAuthStateChanged,
-  signInWithPopup,
-  signInWithRedirect,
-  signOut,
-} from "firebase/auth";
-import { auth, provider } from "./firebase";
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from "firebase/auth";
 import { elements } from "./elements";
-import { state } from "./state";
-import type { ListDoc } from "./types";
+import { auth, provider } from "./firebase";
 import {
   backfillItemOrder,
   backfillListOrder,
@@ -26,6 +19,8 @@ import {
   updateItem,
   updateList,
 } from "./firestore";
+import { state } from "./state";
+import type { ListDoc } from "./types";
 import { renderItems, renderLists, resetRenameForm, setAuthUi } from "./ui";
 
 let unsubscribeItems: (() => void) | null = null;
@@ -57,16 +52,15 @@ function getUserLabel(): string {
   return state.user.displayName ?? state.user.email ?? "Someone";
 }
 
-function applyTheme(theme: "dark" | "light") {
+function applyTheme(theme: "shopping-dark" | "shopping-light") {
   document.documentElement.setAttribute("data-theme", theme);
-  elements.themeToggle.textContent = theme === "dark" ? "Light mode" : "Dark mode";
-  elements.themeToggle.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
+  elements.themeToggle.textContent = theme === "shopping-dark" ? "Light mode" : "Dark mode";
 }
 
 function swapOrders(
   currentOrder: number,
   targetOrder: number,
-  direction: "up" | "down"
+  direction: "up" | "down",
 ): { current: number; target: number } {
   if (currentOrder !== targetOrder) {
     return { current: targetOrder, target: currentOrder };
@@ -114,9 +108,10 @@ function subscribeToItems() {
       state.items.some((item) => item.orderMissing || item.quantityMissing) &&
       !state.backfilledItemLists.has(state.currentListId)
     ) {
-      state.backfilledItemLists.add(state.currentListId);
-      void backfillItemOrder(state.currentListId, getUserLabel()).catch(() => {
-        state.backfilledItemLists.delete(state.currentListId!);
+      const listIdToBackfill = state.currentListId;
+      state.backfilledItemLists.add(listIdToBackfill);
+      void backfillItemOrder(listIdToBackfill, getUserLabel()).catch(() => {
+        state.backfilledItemLists.delete(listIdToBackfill);
       });
     }
     renderItems(state, itemHandlers);
@@ -175,7 +170,7 @@ const listHandlers = {
         { id: updatedCurrent.id, order: updatedCurrent.order },
         { id: updatedTarget.id, order: updatedTarget.order },
       ],
-      getUserLabel()
+      getUserLabel(),
     );
   },
 };
@@ -250,7 +245,7 @@ const itemHandlers = {
         { id: updatedCurrent.id, order: updatedCurrent.order },
         { id: updatedTarget.id, order: updatedTarget.order },
       ],
-      getUserLabel()
+      getUserLabel(),
     );
   },
 };
@@ -261,9 +256,7 @@ subscribeLists((lists) => {
 
   if (!state.currentListId) {
     const storedListId = readStoredListId();
-    const restoredList = storedListId
-      ? state.lists.find((list) => list.id === storedListId)
-      : undefined;
+    const restoredList = storedListId ? state.lists.find((list) => list.id === storedListId) : undefined;
     const defaultList = restoredList ?? state.lists.find((list) => list.isDefault) ?? state.lists[0];
     setActiveList(defaultList?.id ?? null);
   } else if (!state.lists.find((list) => list.id === state.currentListId)) {
@@ -388,9 +381,7 @@ elements.confirmDeleteBtn.addEventListener("click", async () => {
   const active = state.lists.find((list) => list.id === state.currentListId) ?? null;
   if (!active) return;
 
-  const mode = (document.querySelector(
-    "input[name='delete-mode']:checked"
-  ) as HTMLInputElement | null)?.value;
+  const mode = (document.querySelector("input[name='delete-mode']:checked") as HTMLInputElement | null)?.value;
   const keepItems = mode === "keep";
 
   elements.confirmDeleteBtn.disabled = true;
@@ -430,12 +421,13 @@ elements.clearAllBtn.addEventListener("click", async () => {
   await clearAllItems(state.currentListId, getUserLabel());
 });
 
-const storedTheme = (localStorage.getItem(themeKey) as "dark" | "light" | null) ?? "dark";
+const storedTheme = (localStorage.getItem(themeKey) as "shopping-dark" | "shopping-light" | null) ?? "shopping-dark";
 applyTheme(storedTheme);
 
 elements.themeToggle.addEventListener("click", () => {
-  const current = (document.documentElement.getAttribute("data-theme") as "dark" | "light") ?? "dark";
-  const next = current === "dark" ? "light" : "dark";
+  const current =
+    (document.documentElement.getAttribute("data-theme") as "shopping-dark" | "shopping-light") ?? "shopping-dark";
+  const next = current === "shopping-dark" ? "shopping-light" : "shopping-dark";
   localStorage.setItem(themeKey, next);
   applyTheme(next);
 });

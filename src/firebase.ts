@@ -1,11 +1,6 @@
 import { initializeApp } from "firebase/app";
+import { browserLocalPersistence, GoogleAuthProvider, getAuth, setPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import {
-  getAuth,
-  GoogleAuthProvider,
-  setPersistence,
-  browserLocalPersistence,
-} from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDjK2UwzJpl_f-PhTCTHz_EENkypKiI7Jg",

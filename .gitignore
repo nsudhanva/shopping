@@ -3,6 +3,7 @@ public/assets/
 scripts/
 .firebase/
 .firebaserc.local
+.vscode/
 .env
 .env.*
 .DS_Store

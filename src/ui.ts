@@ -1,13 +1,13 @@
-import type { ItemDoc, ListDoc, State } from "./types";
 import { elements } from "./elements";
+import type { ItemDoc, ListDoc, State } from "./types";
 
-export type ListHandlers = {
+export interface ListHandlers {
   onSelectList: (listId: string) => void;
   onRenameList: (list: ListDoc) => void;
   onMoveList: (listId: string, direction: "up" | "down") => void;
-};
+}
 
-export type ItemHandlers = {
+export interface ItemHandlers {
   onToggle: (itemId: string, checked: boolean) => void;
   onEditStart: (item: ItemDoc) => void;
   onEditInput: (value: string) => void;
@@ -18,67 +18,56 @@ export type ItemHandlers = {
   onQuantityChange: (itemId: string, quantity: number) => void;
   onUnitChange: (itemId: string, unit: string) => void;
   onMoveItem: (itemId: string, direction: "up" | "down") => void;
-};
+}
 
-function isMobileViewport() {
+function isMobileViewport(): boolean {
   return window.matchMedia("(max-width: 900px)").matches;
 }
 
 function bindTapAndLongPress(element: HTMLElement, onTap: () => void, onLongPress: () => void) {
-  let holdTimer: number | null = null;
-  let longPressTriggered = false;
+  let holdTimer: ReturnType<typeof setTimeout> | null = null;
+  let didLongPress = false;
 
   const clearHold = () => {
-    if (holdTimer !== null) {
-      window.clearTimeout(holdTimer);
+    if (holdTimer) {
+      clearTimeout(holdTimer);
       holdTimer = null;
     }
   };
 
-  element.addEventListener("pointerdown", (event) => {
-    if (!isMobileViewport() || event.pointerType === "mouse") return;
-    clearHold();
-    longPressTriggered = false;
-    holdTimer = window.setTimeout(() => {
-      longPressTriggered = true;
+  element.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    didLongPress = false;
+    holdTimer = setTimeout(() => {
+      didLongPress = true;
       onLongPress();
-    }, 520);
+    }, 600);
   });
 
-  element.addEventListener("pointerup", clearHold);
+  element.addEventListener("pointerup", () => {
+    clearHold();
+    if (!didLongPress) {
+      onTap();
+    }
+  });
+
   element.addEventListener("pointercancel", clearHold);
   element.addEventListener("pointerleave", clearHold);
-
-  element.addEventListener("click", (event) => {
-    if (longPressTriggered) {
-      event.preventDefault();
-      longPressTriggered = false;
-      return;
-    }
-    onTap();
-  });
 }
 
-function resolveUserLabel(
-  name: string | undefined,
-  id: string | undefined,
-  currentUserId: string | null
-) {
-  if (id && currentUserId && id === currentUserId) return "you";
-  return name || "someone";
+function resolveUserLabel(name: string | undefined, id: string | undefined, currentUserId: string | null): string {
+  if (id && id === currentUserId) return "you";
+  return name ?? "unknown";
 }
 
 export function setEditingEnabled(enabled: boolean) {
+  elements.newItemInput.disabled = !enabled;
+  const submitBtn = elements.newItemForm.querySelector('button[type="submit"]') as HTMLButtonElement;
+  if (submitBtn) submitBtn.disabled = !enabled;
   elements.newListBtn.disabled = !enabled;
   elements.newListInput.disabled = !enabled;
-  elements.newItemInput.disabled = !enabled;
-  elements.deleteListBtn.disabled = !enabled;
-  elements.newItemForm.querySelector("button")!.disabled = !enabled;
-  elements.editListBtn.disabled = !enabled;
-  elements.checkAllBtn.disabled = !enabled;
-  elements.uncheckAllBtn.disabled = !enabled;
-  elements.clearCheckedBtn.disabled = !enabled;
-  elements.clearAllBtn.disabled = !enabled;
+  const newListSubmit = elements.newListForm.querySelector('button[type="submit"]') as HTMLButtonElement;
+  if (newListSubmit) newListSubmit.disabled = !enabled;
 }
 
 export function setAuthUi(state: State) {
@@ -86,15 +75,13 @@ export function setAuthUi(state: State) {
     elements.signInBtn.classList.add("hidden");
     elements.signOutBtn.classList.remove("hidden");
     elements.authMeta.classList.remove("hidden");
-    elements.authMeta.textContent = state.user.displayName ?? state.user.email ?? "Signed in";
-    elements.authHint.textContent = "Signed in to edit.";
-    setEditingEnabled(true);
+    elements.authMeta.textContent = state.user.displayName ?? state.user.email ?? "";
+    elements.authHint.textContent = "";
   } else {
     elements.signInBtn.classList.remove("hidden");
     elements.signOutBtn.classList.add("hidden");
     elements.authMeta.classList.add("hidden");
     elements.authHint.textContent = "Sign in to add or edit.";
-    setEditingEnabled(false);
   }
 }
 
@@ -103,56 +90,80 @@ export function renderLists(state: State, handlers: ListHandlers) {
   state.lists.forEach((list, index) => {
     const isFirst = index === 0;
     const isLast = index === state.lists.length - 1;
-    const li = document.createElement("li");
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = list.name;
-    if (list.id === state.currentListId) {
-      button.classList.add("active");
-    }
-    if (list.isDefault) {
-      const note = document.createElement("small");
-      note.textContent = "Default";
-      button.appendChild(note);
-    }
-    button.addEventListener("click", () => {
-      handlers.onSelectList(list.id);
-    });
-    li.appendChild(button);
+    const isActive = list.id === state.currentListId;
 
+    // daisyUI menu item
+    const li = document.createElement("li");
+
+    // Main clickable area with content and actions
+    const wrapper = document.createElement("div");
+    wrapper.className = `flex items-center justify-between gap-2 w-full rounded-lg px-3 py-2 cursor-pointer transition-colors ${
+      isActive ? "bg-primary/20 text-primary font-semibold" : "hover:bg-base-300"
+    }`;
+
+    // Content button (name + badge)
+    const content = document.createElement("button");
+    content.type = "button";
+    content.className = "flex-1 flex flex-col items-start text-left bg-transparent border-none p-0 cursor-pointer";
+    content.addEventListener("click", () => {
+      handlers.onSelectList(list.id);
+      // Close drawer on mobile
+      const toggle = document.getElementById("lists-drawer-toggle") as HTMLInputElement;
+      if (toggle && isMobileViewport()) toggle.checked = false;
+    });
+
+    const name = document.createElement("span");
+    name.className = "truncate w-full";
+    name.textContent = list.name;
+    content.appendChild(name);
+
+    if (list.isDefault) {
+      const badge = document.createElement("span");
+      badge.className = "badge badge-xs badge-ghost mt-0.5";
+      badge.textContent = "Default";
+      content.appendChild(badge);
+    }
+
+    wrapper.appendChild(content);
+
+    // Actions
     const actions = document.createElement("div");
-    actions.className = "list-actions";
+    actions.className = "flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity";
+    li.className = "group"; // Enable hover state
+
+    const btnClass = "btn btn-ghost btn-xs btn-square";
 
     const moveUpBtn = document.createElement("button");
     moveUpBtn.type = "button";
-    moveUpBtn.className = "secondary reorder-btn";
-    moveUpBtn.textContent = "↑";
+    moveUpBtn.className = btnClass;
+    moveUpBtn.innerHTML = "↑";
     moveUpBtn.title = "Move up";
-    moveUpBtn.setAttribute("aria-label", "Move list up");
     moveUpBtn.disabled = !state.user || isFirst;
-    moveUpBtn.addEventListener("click", () => {
+    moveUpBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       if (!state.user || isFirst) return;
       handlers.onMoveList(list.id, "up");
     });
 
     const moveDownBtn = document.createElement("button");
     moveDownBtn.type = "button";
-    moveDownBtn.className = "secondary reorder-btn";
-    moveDownBtn.textContent = "↓";
+    moveDownBtn.className = btnClass;
+    moveDownBtn.innerHTML = "↓";
     moveDownBtn.title = "Move down";
-    moveDownBtn.setAttribute("aria-label", "Move list down");
     moveDownBtn.disabled = !state.user || isLast;
-    moveDownBtn.addEventListener("click", () => {
+    moveDownBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       if (!state.user || isLast) return;
       handlers.onMoveList(list.id, "down");
     });
 
     const renameBtn = document.createElement("button");
     renameBtn.type = "button";
-    renameBtn.className = "secondary";
+    renameBtn.className = "btn btn-ghost btn-xs";
     renameBtn.textContent = "Rename";
     renameBtn.disabled = !state.user;
-    renameBtn.addEventListener("click", () => {
+    renameBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       if (!state.user) return;
       handlers.onRenameList(list);
     });
@@ -160,32 +171,37 @@ export function renderLists(state: State, handlers: ListHandlers) {
     actions.appendChild(moveUpBtn);
     actions.appendChild(moveDownBtn);
     actions.appendChild(renameBtn);
-    li.appendChild(actions);
+    wrapper.appendChild(actions);
+
+    li.appendChild(wrapper);
     elements.lists.appendChild(li);
   });
 
+  // Update main content area
   const active = state.lists.find((list) => list.id === state.currentListId) ?? null;
   const canDelete = Boolean(active && state.user);
   elements.activeListTitle.textContent = active?.name ?? "No list selected";
+
   if (active) {
     const countLabel = `${state.items.length} item${state.items.length === 1 ? "" : "s"}`;
     const createdBy = resolveUserLabel(active.createdByName, active.createdBy, state.user?.uid ?? null);
     const updatedBy = resolveUserLabel(
       active.updatedByName ?? active.createdByName,
       undefined,
-      state.user?.uid ?? null
+      state.user?.uid ?? null,
     );
     elements.activeListSubtitle.textContent = `${countLabel} · Created by ${createdBy} · Edited by ${updatedBy}`;
   } else {
     elements.activeListSubtitle.textContent = "";
   }
+
   elements.deleteListBtn.disabled = !canDelete;
   elements.editListBtn.disabled = !active || !state.user;
   elements.checkAllBtn.disabled = !active || !state.user || state.items.length === 0;
   elements.uncheckAllBtn.disabled = !active || !state.user || state.items.length === 0;
-  elements.clearCheckedBtn.disabled =
-    !active || !state.user || state.items.filter((item) => item.checked).length === 0;
+  elements.clearCheckedBtn.disabled = !active || !state.user || state.items.filter((item) => item.checked).length === 0;
   elements.clearAllBtn.disabled = !active || !state.user || state.items.length === 0;
+
   if (!active) {
     elements.editListForm.classList.add("hidden");
   }
@@ -197,6 +213,7 @@ export function renderItems(state: State, handlers: ItemHandlers) {
 
   if (state.items.length === 0) {
     const empty = document.createElement("li");
+    empty.className = "text-center py-8 text-base-content/60";
     empty.textContent = state.user
       ? "Nothing here yet. Add the first item."
       : "Nothing here yet. Sign in to add items.";
@@ -207,37 +224,80 @@ export function renderItems(state: State, handlers: ItemHandlers) {
   state.items.forEach((item, index) => {
     const isFirst = index === 0;
     const isLast = index === state.items.length - 1;
-    const li = document.createElement("li");
-    const main = document.createElement("div");
-    main.className = "item-main";
 
+    // Item card
+    const li = document.createElement("li");
+    li.className = "card card-compact bg-base-200 shadow-sm";
+
+    const cardBody = document.createElement("div");
+    cardBody.className = "card-body flex-row items-center gap-4";
+
+    // Checkbox
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
+    checkbox.className = "checkbox checkbox-primary";
     checkbox.checked = item.checked;
     checkbox.disabled = !state.user;
-
     checkbox.addEventListener("change", () => {
       if (!state.user) return;
       handlers.onToggle(item.id, checkbox.checked);
     });
+    cardBody.appendChild(checkbox);
 
-    main.appendChild(checkbox);
-
+    // Content area
     const content = document.createElement("div");
-    content.className = "item-content";
+    content.className = "flex-1 min-w-0";
 
-    const row = document.createElement("div");
-    row.className = "item-row";
+    // Top row: text + quantity controls + unit (item name comes first)
+    const topRow = document.createElement("div");
+    topRow.className = "flex flex-wrap items-center gap-3";
 
-    const qtyGroup = document.createElement("div");
-    qtyGroup.className = "item-qty-group";
+    // Item text/edit (FIRST)
+    if (state.editingItemId === item.id) {
+      const input = document.createElement("input");
+      input.className = "input input-sm input-bordered flex-1 min-w-32";
+      input.type = "text";
+      input.maxLength = 120;
+      input.value = state.editingItemText;
+      input.addEventListener("input", () => {
+        handlers.onEditInput(input.value);
+      });
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handlers.onEditSave(item.id);
+        }
+      });
+      topRow.appendChild(input);
+      setTimeout(() => input.focus(), 0);
+    } else {
+      if (state.user) {
+        const textButton = document.createElement("button");
+        textButton.type = "button";
+        textButton.className = `flex-1 text-left font-medium min-w-32 ${item.checked ? "line-through opacity-50" : ""}`;
+        textButton.textContent = item.text;
+        bindTapAndLongPress(
+          textButton,
+          () => handlers.onEditStart(item),
+          () => handlers.onLongDelete(item.id),
+        );
+        topRow.appendChild(textButton);
+      } else {
+        const text = document.createElement("span");
+        text.className = `flex-1 min-w-32 ${item.checked ? "line-through opacity-50" : ""}`;
+        text.textContent = item.text;
+        topRow.appendChild(text);
+      }
+    }
+
+    // Quantity controls using daisyUI join (AFTER item name)
+    const qtyJoin = document.createElement("div");
+    qtyJoin.className = "join";
 
     const decBtn = document.createElement("button");
     decBtn.type = "button";
-    decBtn.className = "secondary qty-btn";
+    decBtn.className = "btn btn-sm join-item";
     decBtn.textContent = "−";
-    decBtn.title = "Decrease quantity";
-    decBtn.setAttribute("aria-label", "Decrease quantity");
     decBtn.disabled = !state.user;
     decBtn.addEventListener("click", () => {
       if (!state.user) return;
@@ -248,10 +308,8 @@ export function renderItems(state: State, handlers: ItemHandlers) {
     qtyInput.type = "number";
     qtyInput.inputMode = "decimal";
     qtyInput.step = "any";
-    qtyInput.className = "item-qty";
+    qtyInput.className = "input input-sm input-bordered join-item w-16 text-center";
     qtyInput.value = String(item.quantity);
-    qtyInput.title = "Quantity";
-    qtyInput.setAttribute("aria-label", "Quantity");
     qtyInput.disabled = !state.user;
     qtyInput.addEventListener("change", () => {
       if (!state.user) return;
@@ -262,136 +320,86 @@ export function renderItems(state: State, handlers: ItemHandlers) {
       }
       handlers.onQuantityChange(item.id, parsed);
     });
-    qtyInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
+    qtyInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
         qtyInput.blur();
       }
     });
 
     const incBtn = document.createElement("button");
     incBtn.type = "button";
-    incBtn.className = "secondary qty-btn";
+    incBtn.className = "btn btn-sm join-item";
     incBtn.textContent = "+";
-    incBtn.title = "Increase quantity";
-    incBtn.setAttribute("aria-label", "Increase quantity");
     incBtn.disabled = !state.user;
     incBtn.addEventListener("click", () => {
       if (!state.user) return;
       handlers.onQuantityChange(item.id, item.quantity + 1);
     });
 
+    qtyJoin.appendChild(decBtn);
+    qtyJoin.appendChild(qtyInput);
+    qtyJoin.appendChild(incBtn);
+    topRow.appendChild(qtyJoin);
+
+    // Unit input (AFTER quantity)
     const unitInput = document.createElement("input");
     unitInput.type = "text";
-    unitInput.className = "item-unit";
+    unitInput.className = "input input-sm input-bordered w-20";
     unitInput.placeholder = "unit";
     unitInput.maxLength = 12;
     unitInput.value = item.unit;
-    unitInput.title = "Unit";
-    unitInput.setAttribute("aria-label", "Unit");
     unitInput.disabled = !state.user;
     unitInput.addEventListener("change", () => {
       if (!state.user) return;
       handlers.onUnitChange(item.id, unitInput.value.trim());
     });
-    unitInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
+    unitInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
         unitInput.blur();
       }
     });
+    topRow.appendChild(unitInput);
 
-    if (state.editingItemId === item.id) {
-      const input = document.createElement("input");
-      input.className = "item-edit-input";
-      input.type = "text";
-      input.maxLength = 120;
-      input.value = state.editingItemText;
-      input.addEventListener("input", () => {
-        handlers.onEditInput(input.value);
-      });
-      input.addEventListener("keydown", (event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          handlers.onEditSave(item.id);
-        }
-      });
-      row.appendChild(input);
-    } else {
-      if (state.user) {
-        const textButton = document.createElement("button");
-        textButton.type = "button";
-        textButton.className = "item-title-btn" + (item.checked ? " checked" : "");
-        textButton.textContent = item.text;
-        textButton.setAttribute("aria-label", `Edit ${item.text}`);
-        bindTapAndLongPress(
-          textButton,
-          () => {
-            handlers.onEditStart(item);
-          },
-          () => {
-            handlers.onLongDelete(item.id);
-          }
-        );
-        row.appendChild(textButton);
-      } else {
-        const text = document.createElement("span");
-        text.className = "item-text" + (item.checked ? " checked" : "");
-        text.textContent = item.text;
-        row.appendChild(text);
-      }
-    }
+    content.appendChild(topRow);
 
-    qtyGroup.appendChild(decBtn);
-    qtyGroup.appendChild(qtyInput);
-    qtyGroup.appendChild(incBtn);
-    qtyGroup.appendChild(unitInput);
-    row.appendChild(qtyGroup);
-
-    content.appendChild(row);
-
+    // Meta info
     const createdBy = resolveUserLabel(item.createdByName, item.createdBy, state.user?.uid ?? null);
-    const updatedBy = resolveUserLabel(
-      item.updatedByName ?? item.createdByName,
-      undefined,
-      state.user?.uid ?? null
-    );
-    const meta = document.createElement("small");
-    meta.className = "item-meta";
+    const updatedBy = resolveUserLabel(item.updatedByName ?? item.createdByName, undefined, state.user?.uid ?? null);
+    const meta = document.createElement("div");
+    meta.className = "text-xs text-base-content/50 mt-1";
     meta.textContent = `Created by ${createdBy} · Edited by ${updatedBy}`;
     content.appendChild(meta);
 
-    main.appendChild(content);
+    cardBody.appendChild(content);
 
+    // Actions
     const actions = document.createElement("div");
-    actions.className = "item-actions";
+    actions.className = "flex items-center gap-1";
 
     if (state.editingItemId === item.id) {
       const saveBtn = document.createElement("button");
       saveBtn.type = "button";
+      saveBtn.className = "btn btn-primary btn-sm";
       saveBtn.textContent = "Save";
       saveBtn.disabled = !state.user;
-      saveBtn.addEventListener("click", () => {
-        handlers.onEditSave(item.id);
-      });
+      saveBtn.addEventListener("click", () => handlers.onEditSave(item.id));
 
       const cancelBtn = document.createElement("button");
       cancelBtn.type = "button";
-      cancelBtn.className = "secondary";
+      cancelBtn.className = "btn btn-ghost btn-sm";
       cancelBtn.textContent = "Cancel";
-      cancelBtn.addEventListener("click", () => {
-        handlers.onEditCancel();
-      });
+      cancelBtn.addEventListener("click", () => handlers.onEditCancel());
 
       actions.appendChild(saveBtn);
       actions.appendChild(cancelBtn);
     } else {
       const moveUpBtn = document.createElement("button");
       moveUpBtn.type = "button";
-      moveUpBtn.className = "secondary reorder-btn";
-      moveUpBtn.textContent = "↑";
+      moveUpBtn.className = "btn btn-ghost btn-xs btn-square";
+      moveUpBtn.innerHTML = "↑";
       moveUpBtn.title = "Move up";
-      moveUpBtn.setAttribute("aria-label", "Move item up");
       moveUpBtn.disabled = !state.user || isFirst;
       moveUpBtn.addEventListener("click", () => {
         if (!state.user || isFirst) return;
@@ -400,10 +408,9 @@ export function renderItems(state: State, handlers: ItemHandlers) {
 
       const moveDownBtn = document.createElement("button");
       moveDownBtn.type = "button";
-      moveDownBtn.className = "secondary reorder-btn";
-      moveDownBtn.textContent = "↓";
+      moveDownBtn.className = "btn btn-ghost btn-xs btn-square";
+      moveDownBtn.innerHTML = "↓";
       moveDownBtn.title = "Move down";
-      moveDownBtn.setAttribute("aria-label", "Move item down");
       moveDownBtn.disabled = !state.user || isLast;
       moveDownBtn.addEventListener("click", () => {
         if (!state.user || isLast) return;
@@ -412,7 +419,7 @@ export function renderItems(state: State, handlers: ItemHandlers) {
 
       const editBtn = document.createElement("button");
       editBtn.type = "button";
-      editBtn.className = "secondary edit-action";
+      editBtn.className = "btn btn-ghost btn-xs hidden sm:inline-flex";
       editBtn.textContent = "Edit";
       editBtn.disabled = !state.user;
       editBtn.addEventListener("click", () => {
@@ -422,7 +429,7 @@ export function renderItems(state: State, handlers: ItemHandlers) {
 
       const deleteBtn = document.createElement("button");
       deleteBtn.type = "button";
-      deleteBtn.className = "secondary delete-action";
+      deleteBtn.className = "btn btn-error btn-xs btn-outline";
       deleteBtn.textContent = "Delete";
       deleteBtn.disabled = !state.user;
       deleteBtn.addEventListener("click", () => {
@@ -436,8 +443,8 @@ export function renderItems(state: State, handlers: ItemHandlers) {
       actions.appendChild(deleteBtn);
     }
 
-    li.appendChild(main);
-    li.appendChild(actions);
+    cardBody.appendChild(actions);
+    li.appendChild(cardBody);
     elements.items.appendChild(li);
   });
 }

@@ -1,0 +1,87 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
+/* Custom dark theme for shopping app */
+@plugin "daisyui/theme" {
+    name: "shopping-dark";
+    default: true;
+    prefersdark: true;
+    color-scheme: dark;
+
+    --color-base-100: oklch(15% 0.02 150);
+    --color-base-200: oklch(18% 0.02 150);
+    --color-base-300: oklch(12% 0.02 150);
+    --color-base-content: oklch(95% 0.01 150);
+
+    --color-primary: oklch(72% 0.18 155);
+    --color-primary-content: oklch(15% 0.05 155);
+
+    --color-secondary: oklch(60% 0.16 155);
+    --color-secondary-content: oklch(98% 0.01 155);
+
+    --color-accent: oklch(75% 0.15 70);
+    --color-accent-content: oklch(20% 0.05 70);
+
+    --color-neutral: oklch(20% 0.02 150);
+    --color-neutral-content: oklch(90% 0.01 150);
+
+    --color-error: oklch(65% 0.22 25);
+    --color-error-content: oklch(98% 0.01 25);
+
+    --radius-selector: 0.5rem;
+    --radius-field: 0.5rem;
+    --radius-box: 1rem;
+
+    --size-selector: 0.25rem;
+    --size-field: 0.25rem;
+    --border: 1px;
+    --depth: 1;
+    --noise: 0;
+}
+
+/* Light theme variant */
+@plugin "daisyui/theme" {
+    name: "shopping-light";
+    prefersdark: false;
+    color-scheme: light;
+
+    --color-base-100: oklch(100% 0 0);
+    --color-base-200: oklch(96% 0.02 90);
+    --color-base-300: oklch(97% 0.01 90);
+    --color-base-content: oklch(20% 0.03 150);
+
+    --color-primary: oklch(50% 0.18 155);
+    --color-primary-content: oklch(98% 0.01 155);
+
+    --color-secondary: oklch(42% 0.15 155);
+    --color-secondary-content: oklch(98% 0.01 155);
+
+    --color-accent: oklch(65% 0.18 70);
+    --color-accent-content: oklch(98% 0.01 70);
+
+    --color-neutral: oklch(96% 0.02 90);
+    --color-neutral-content: oklch(20% 0.03 150);
+
+    --color-error: oklch(55% 0.22 25);
+    --color-error-content: oklch(98% 0.01 25);
+
+    --radius-selector: 0.5rem;
+    --radius-field: 0.5rem;
+    --radius-box: 1rem;
+}
+
+/* Custom base styles */
+@layer base {
+    body {
+        background: radial-gradient(circle at top right, oklch(72% 0.18 155 / 0.08), transparent 35%),
+            radial-gradient(circle at top left, oklch(75% 0.15 70 / 0.06), transparent 40%),
+            var(--color-base-300);
+    }
+}
+
+/* Custom utilities */
+@layer utilities {
+    .text-muted {
+        opacity: 0.6;
+    }
+}

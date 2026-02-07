@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun build src/main.ts --outdir public/assets --target browser --format=esm --splitting --minify",
+    "build:css": "bunx @tailwindcss/cli -i src/styles.css -o public/styles.css --minify",
+    "build:js": "bun build src/main.ts --outdir public/assets --target browser --format=esm --splitting --minify",
+    "build": "bun run build:css && bun run build:js",
     "serve": "bunx serve public",
     "dev": "bun run build && bun run serve",
     "deploy": "bunx firebase-tools deploy",
@@ -12,6 +14,8 @@
     "deploy:firestore": "bunx firebase-tools deploy --only firestore"
   },
   "dependencies": {
-    "firebase": "latest"
+    "daisyui": "^5.5.18",
+    "firebase": "latest",
+    "tailwindcss": "^4.1.18"
   }
 }

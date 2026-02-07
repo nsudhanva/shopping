@@ -1,138 +1,152 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>shopping</title>
-    <meta name="description" content="A fast, simple, shared shopping list." />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css" />
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body>
-    <input id="lists-drawer-toggle" class="drawer-toggle" type="checkbox" aria-hidden="true" />
+<html lang="en" data-theme="shopping-dark">
 
-    <header class="topbar">
-      <div class="topbar-left">
-        <label
-          for="lists-drawer-toggle"
-          class="secondary drawer-button"
-          aria-controls="lists-sidebar"
-          aria-label="Toggle lists"
-        >
-          <span class="drawer-icon" aria-hidden="true"></span>
-          <span>Lists</span>
-        </label>
-        <div class="brand">
-          <span class="brand-mark">S</span>
-          <div>
-            <div class="brand-title">shopping</div>
-            <div class="brand-subtitle">Shared lists, lightning fast</div>
-          </div>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>shopping</title>
+  <meta name="description" content="A fast, simple, shared shopping list." />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+
+<body class="min-h-screen">
+  <!-- Navbar -->
+  <div class="navbar bg-base-100 px-4 lg:px-8 shadow-sm">
+    <div class="flex-none lg:hidden">
+      <label for="lists-drawer-toggle" class="btn btn-square btn-ghost drawer-button">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+          class="inline-block w-5 h-5 stroke-current">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+      </label>
+    </div>
+    <div class="flex-1 gap-3">
+      <div class="avatar placeholder">
+        <div class="bg-primary text-primary-content rounded-xl w-10">
+          <span class="text-lg font-bold">S</span>
         </div>
       </div>
-      <div class="auth">
-        <button id="theme-toggle" class="secondary" aria-pressed="true">Light mode</button>
-        <button id="sign-in-btn" class="contrast">Sign in with Google</button>
-        <button id="sign-out-btn" class="secondary hidden">Sign out</button>
-        <div id="auth-meta" class="auth-meta hidden"></div>
+      <div>
+        <div class="font-bold text-lg">shopping</div>
+        <div class="text-xs text-muted">Shared lists, lightning fast</div>
       </div>
-    </header>
+    </div>
+    <div class="flex-none gap-2">
+      <button id="theme-toggle" class="btn btn-ghost btn-sm">Light mode</button>
+      <button id="sign-in-btn" class="btn btn-primary btn-sm">Sign in with Google</button>
+      <button id="sign-out-btn" class="btn btn-ghost btn-sm hidden">Sign out</button>
+      <span id="auth-meta" class="text-sm text-muted hidden"></span>
+    </div>
+  </div>
 
-    <div class="app">
-      <aside class="sidebar" id="lists-sidebar">
-        <div class="sidebar-header">
-          <h3>Lists</h3>
-          <div class="sidebar-header-actions">
-            <button id="new-list-btn" class="secondary" aria-label="Add list">+ New</button>
-            <label for="lists-drawer-toggle" class="secondary drawer-close" aria-label="Close lists">
-              Close
-            </label>
+  <!-- Main Layout with Drawer -->
+  <div class="drawer lg:drawer-open">
+    <input id="lists-drawer-toggle" type="checkbox" class="drawer-toggle" />
+
+    <div class="drawer-content p-4 lg:p-6">
+      <!-- Main Content -->
+      <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+          <!-- Header -->
+          <div class="flex flex-wrap items-start justify-between gap-4 mb-4">
+            <div>
+              <div class="flex items-center gap-3">
+                <h2 id="active-list-title" class="card-title text-2xl">Loading…</h2>
+                <button id="edit-list-btn" class="btn btn-ghost btn-sm">Rename</button>
+              </div>
+              <form id="edit-list-form" class="hidden flex gap-2 mt-2">
+                <input id="edit-list-input" type="text" name="name" placeholder="List name" maxlength="60" required
+                  class="input input-bordered input-sm" />
+                <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                <button type="button" id="cancel-edit-list-btn" class="btn btn-ghost btn-sm">Cancel</button>
+              </form>
+              <p id="active-list-subtitle" class="text-sm text-muted mt-1"></p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button id="check-all-btn" class="btn btn-ghost btn-sm">Check all</button>
+              <button id="uncheck-all-btn" class="btn btn-ghost btn-sm">Uncheck all</button>
+              <button id="clear-checked-btn" class="btn btn-error btn-outline btn-sm">Clear checked</button>
+              <button id="clear-all-btn" class="btn btn-error btn-outline btn-sm">Clear all</button>
+              <button id="delete-list-btn" class="btn btn-error btn-sm">Delete list</button>
+            </div>
           </div>
+
+          <!-- Add Item Form -->
+          <form id="new-item-form" class="flex gap-2 mb-6">
+            <input id="new-item-input" type="text" name="text" placeholder="Add an item" maxlength="120" required
+              class="input input-bordered flex-1" />
+            <button type="submit" class="btn btn-primary">Add</button>
+          </form>
+
+          <!-- Items List -->
+          <ul id="items" class="space-y-2"></ul>
         </div>
-        <form id="new-list-form" class="hidden">
-          <input id="new-list-input" type="text" name="name" placeholder="List name" maxlength="60" required />
-          <div class="sidebar-actions">
-            <button type="submit">Create</button>
-            <button type="button" id="cancel-list-btn" class="secondary">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="drawer-side z-40">
+      <label for="lists-drawer-toggle" class="drawer-overlay" aria-label="close sidebar"></label>
+      <aside id="lists-sidebar" class="bg-base-100 min-h-full w-72 p-4">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xl font-bold">Lists</h3>
+          <button id="new-list-btn" class="btn btn-primary btn-sm">+ New</button>
+        </div>
+
+        <form id="new-list-form" class="hidden space-y-2 mb-4">
+          <input id="new-list-input" type="text" name="name" placeholder="List name" maxlength="60" required
+            class="input input-bordered input-sm w-full" />
+          <div class="flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm flex-1">Create</button>
+            <button type="button" id="cancel-list-btn" class="btn btn-ghost btn-sm flex-1">Cancel</button>
           </div>
         </form>
-        <nav>
-          <ul id="lists"></ul>
-        </nav>
-        <form id="rename-list-form" class="hidden">
-          <input id="rename-list-input" type="text" name="name" placeholder="Rename list" maxlength="60" required />
-          <div class="sidebar-actions">
-            <button type="submit">Save</button>
-            <button type="button" id="cancel-rename-list-btn" class="secondary">Cancel</button>
+
+        <!-- Lists Menu -->
+        <ul id="lists" class="menu menu-sm bg-base-200 rounded-box w-full"></ul>
+
+        <form id="rename-list-form" class="hidden space-y-2 mt-4">
+          <input id="rename-list-input" type="text" name="name" placeholder="Rename list" maxlength="60" required
+            class="input input-bordered input-sm w-full" />
+          <div class="flex gap-2">
+            <button type="submit" class="btn btn-primary btn-sm flex-1">Save</button>
+            <button type="button" id="cancel-rename-list-btn" class="btn btn-ghost btn-sm flex-1">Cancel</button>
           </div>
         </form>
-        <div class="sidebar-footer">
-          <small id="auth-hint"></small>
+
+        <div class="mt-auto pt-4">
+          <small id="auth-hint" class="text-muted"></small>
         </div>
       </aside>
-
-      <main class="content">
-        <section class="content-header">
-          <div class="list-meta">
-            <div class="list-title">
-              <h2 id="active-list-title">Loading…</h2>
-              <button id="edit-list-btn" class="secondary">Rename</button>
-            </div>
-            <form id="edit-list-form" class="hidden">
-              <input id="edit-list-input" type="text" name="name" placeholder="List name" maxlength="60" required />
-              <div class="list-edit-actions">
-                <button type="submit">Save</button>
-                <button type="button" id="cancel-edit-list-btn" class="secondary">Cancel</button>
-              </div>
-            </form>
-            <p id="active-list-subtitle" class="subtitle"></p>
-          </div>
-          <div class="content-actions">
-            <button id="check-all-btn" class="secondary">Check all</button>
-            <button id="uncheck-all-btn" class="secondary">Uncheck all</button>
-            <button id="clear-checked-btn" class="secondary danger">Clear checked</button>
-            <button id="clear-all-btn" class="secondary danger">Clear all</button>
-            <button id="delete-list-btn" class="secondary danger">Delete list</button>
-          </div>
-        </section>
-
-        <section class="composer">
-          <form id="new-item-form">
-            <input id="new-item-input" type="text" name="text" placeholder="Add an item" maxlength="120" required />
-            <button type="submit">Add</button>
-          </form>
-        </section>
-
-        <section class="items">
-          <ul id="items"></ul>
-        </section>
-      </main>
     </div>
-    <label for="lists-drawer-toggle" class="drawer-backdrop" aria-hidden="true"></label>
+  </div>
 
-    <dialog id="delete-list-dialog">
-      <article>
-        <header>
-          <h3>Delete this list?</h3>
-        </header>
-        <p>This list will be removed. What should happen to its items?</p>
-        <fieldset>
-          <label>
-            <input type="radio" name="delete-mode" value="delete" checked />
-            Delete items
-          </label>
-          <label>
-            <input type="radio" name="delete-mode" value="keep" />
-            Keep items (move to Inbox)
-          </label>
-        </fieldset>
-        <footer>
-          <button id="confirm-delete-btn" class="contrast">Confirm</button>
-          <button id="cancel-delete-btn" class="secondary">Cancel</button>
-        </footer>
-      </article>
-    </dialog>
+  <!-- Delete Confirmation Modal -->
+  <dialog id="delete-list-dialog" class="modal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg">Delete this list?</h3>
+      <p class="py-4 text-muted">This list will be removed. What should happen to its items?</p>
+      <div class="form-control">
+        <label class="label cursor-pointer justify-start gap-3">
+          <input type="radio" name="delete-mode" value="delete" checked class="radio radio-primary" />
+          <span>Delete items</span>
+        </label>
+        <label class="label cursor-pointer justify-start gap-3">
+          <input type="radio" name="delete-mode" value="keep" class="radio radio-primary" />
+          <span>Keep items (move to Inbox)</span>
+        </label>
+      </div>
+      <div class="modal-action">
+        <button id="confirm-delete-btn" class="btn btn-error">Confirm</button>
+        <button id="cancel-delete-btn" class="btn btn-ghost">Cancel</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
+  </dialog>
 
-    <script type="module" src="/assets/main.js"></script>
-  </body>
+  <script type="module" src="/assets/main.js"></script>
+</body>
+
 </html>

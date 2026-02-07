@@ -1,7 +1,10 @@
 # shopping
-Fast, shared shopping lists built with Bun + TypeScript + Firebase (PicoCSS).
+
+Fast, shared shopping lists built with
+Bun + TypeScript + Firebase + daisyUI.
 
 ## Features
+
 - Shared lists with items (public read, Google-auth write)
 - Add, edit, check/uncheck, delete items
 - Inline quantity per item (decimal, defaults to 1) with +/- controls
@@ -17,49 +20,44 @@ Fast, shared shopping lists built with Bun + TypeScript + Firebase (PicoCSS).
 - Responsive layout with left nav
 
 ## Tech
+
 - Bun + Vanilla TypeScript
-- PicoCSS for styling
+- Tailwind CSS v4 + daisyUI v5 for styling
 - Firebase Hosting + Firestore (Native mode)
 - Firebase Auth (Google)
 
-## Best Practices Used
-- Keep runtime minimal: no frontend framework, no extra UI library, no client state library.
-- Keep bundle lean: build with Bun, ship one small ESM bundle, avoid unnecessary dependencies.
-- Use CSS-first behavior when possible: mobile Lists drawer uses CSS-only toggle, not JavaScript.
-- Keep JS focused on app state and data: TypeScript modules separate orchestration, rendering, Firebase setup, and Firestore data operations.
-- Preserve UX state cheaply: selected list persists with `localStorage` and safe fallback logic.
-- Optimize Firestore access patterns: realtime subscriptions per active scope, batch writes for bulk operations.
-- Enforce data integrity in security rules: strict field allowlists and type validation in `firestore.rules`.
-- Keep auth boundaries clear: reads are public, writes require authenticated users.
-- Follow accessible markup: semantic HTML, labeled controls, keyboard-friendly form/input behavior, explicit ARIA labels where needed.
-- Use Pico design tokens for responsive tuning: mobile density and spacing rely on Pico CSS variables first, then local overrides.
-- Keep secrets out of git: only public Firebase web config is client-side; credentials stay in environment variables and GitHub secrets.
-
 ## Project Structure
-- `public/index.html`: Static shell and layout.
-- `public/styles.css`: Theme + responsive styling.
-- `public/assets/`: Build output (generated).
-- `src/main.ts`: App orchestration, state wiring, auth, and handlers.
-- `src/firestore.ts`: Firestore reads/writes, ordering, backfills.
+
+- `src/main.ts`: App orchestration, state wiring, auth, and event handlers.
 - `src/ui.ts`: DOM rendering and UI event helpers.
+- `src/firestore.ts`: Firestore reads/writes, ordering, backfills.
 - `src/firebase.ts`: Firebase SDK initialization.
+- `src/state.ts`: Mutable app state singleton.
+- `src/types.ts`: Shared TypeScript types.
+- `src/elements.ts`: Cached DOM element references.
+- `src/dom.ts`: DOM utility (querySelector wrapper).
+- `src/styles.css`: Tailwind + daisyUI source CSS with custom themes.
+- `public/index.html`: Static shell and layout.
+- `public/styles.css`: Built CSS output (generated).
+- `public/assets/`: Built JS output (generated).
 - `firestore.rules`: Firestore security rules.
 - `firebase.json`: Firebase Hosting + Firestore config.
 
 ## Setup
+
 1. Install dependencies.
 
 ```bash
 bun install
 ```
 
-2. Build the app.
+1. Build the app.
 
 ```bash
 bun run build
 ```
 
-3. Serve locally.
+1. Serve locally.
 
 ```bash
 bun run serve
@@ -68,6 +66,7 @@ bun run serve
 Open the URL printed by the server (typically `http://localhost:3000`).
 
 ### Dev loop
+
 Rebuild and serve:
 
 ```bash
@@ -75,48 +74,55 @@ bun run dev
 ```
 
 ## Firebase
+
 1. Install Firebase CLI.
 
 ```bash
 bunx firebase-tools --version
 ```
 
-2. Login and select project.
+1. Login and select project.
 
 ```bash
 bunx firebase-tools login
 bunx firebase-tools use sudhanva-personal
 ```
 
-3. Create Hosting site (if not created yet).
+1. Create Hosting site (if not created yet).
 
 ```bash
 bunx firebase-tools hosting:sites:create sudhanva-shopping-app
 ```
 
-4. Enable Google provider in Firebase Auth Console.
-5. Add your domains to Firebase Auth -> Settings -> Authorized domains.
+1. Enable Google provider in Firebase Auth Console.
+1. Add your domains to Firebase Auth -> Settings -> Authorized domains.
 
-6. Deploy rules and hosting.
+1. Deploy rules and hosting.
 
 ```bash
 bunx firebase-tools deploy
 ```
 
 ## Firestore Rules
-Rules live in `firestore.rules`. Reads are public. Writes require auth and a strict schema (including `order` for sorting).
+
+Rules live in `firestore.rules`. Reads are public.
+Writes require auth and a strict schema
+(including `order` for sorting).
 
 ## Cloudflare DNS (Optional)
+
 Point your custom domain to Firebase Hosting:
+
 - CNAME `shopping.sudhanva.me` -> `sudhanva-shopping-app.web.app`
-- Add the TXT record Firebase gives you for domain ownership verification
+- Add the TXT record Firebase gives you for domain ownership
+  verification
+
 Then wait for SSL provisioning to complete.
 
 ## GitHub Actions Deploy
+
 On push to `main`, the workflow deploys to Firebase Hosting.
 
 Required repo secrets:
-- `FIREBASE_SERVICE_ACCOUNT_SUDHANVA_PERSONAL` (JSON service account)
 
-## Review
-Line-by-line review completed on February 5, 2026.
+- `FIREBASE_SERVICE_ACCOUNT_SUDHANVA_PERSONAL` (JSON service account)
