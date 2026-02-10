@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { browserLocalPersistence, GoogleAuthProvider, getAuth, setPersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDjK2UwzJpl_f-PhTCTHz_EENkypKiI7Jg",
@@ -16,5 +17,6 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 export const provider = new GoogleAuthProvider();
+export const functions = getFunctions(app, "us-east1");
 
 void setPersistence(auth, browserLocalPersistence);

@@ -1,4 +1,12 @@
 {
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": ["node_modules", ".git", "firebase-debug.log", "firebase-debug.*.log"],
+      "predeploy": ["bun install --cwd \"$RESOURCE_DIR\"", "bun run --cwd \"$RESOURCE_DIR\" build"]
+    }
+  ],
   "hosting": {
     "site": "sudhanva-shopping-app",
     "public": "public",

@@ -97,8 +97,9 @@ export function renderLists(state: State, handlers: ListHandlers) {
 
     // Main clickable area with content and actions
     const wrapper = document.createElement("div");
-    wrapper.className = `flex items-center justify-between gap-2 w-full rounded-lg px-3 py-2 cursor-pointer transition-colors ${isActive ? "bg-primary/20 text-primary font-semibold" : "hover:bg-base-300"
-      }`;
+    wrapper.className = `flex items-center justify-between gap-2 w-full rounded-lg px-3 py-2 cursor-pointer transition-colors ${
+      isActive ? "bg-primary/20 text-primary font-semibold" : "hover:bg-base-300"
+    }`;
 
     // Content button (name + badge)
     const content = document.createElement("button");
@@ -228,7 +229,6 @@ export function renderItems(state: State, handlers: ItemHandlers) {
   state.items.forEach((item, index) => {
     const isFirst = index === 0;
     const isLast = index === state.items.length - 1;
-    const isMobile = isMobileViewport();
 
     // Item card
     const li = document.createElement("li");
@@ -601,8 +601,6 @@ export function renderItems(state: State, handlers: ItemHandlers) {
     mobileContainer.appendChild(mobileLeft);
     mobileContainer.appendChild(mobileRight);
     cardBody.appendChild(mobileContainer);
-
-
 
     li.appendChild(cardBody);
     elements.items.appendChild(li);

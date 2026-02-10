@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "daisyui": "^5.5.18",
-    "firebase": "latest",
+    "firebase": "12.9.0",
     "tailwindcss": "^4.1.18"
   }
 }

@@ -142,12 +142,19 @@ export async function touchList(listId: string, userName: string) {
   });
 }
 
-export async function createItem(params: { listId: string; text: string; userId: string; userName: string }) {
+export async function createItem(params: {
+  listId: string;
+  text: string;
+  userId: string;
+  userName: string;
+  quantity?: number;
+  unit?: string;
+}) {
   await addDoc(collection(db, "lists", params.listId, "items"), {
     text: params.text,
     checked: false,
-    quantity: 1,
-    unit: "",
+    quantity: params.quantity ?? 1,
+    unit: params.unit ?? "",
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     createdBy: params.userId,

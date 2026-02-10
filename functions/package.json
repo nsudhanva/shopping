@@ -1,0 +1,22 @@
+{
+  "name": "shopping-functions",
+  "private": true,
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "serve": "bun run build && bunx firebase-tools emulators:start --only functions",
+    "deploy": "bunx firebase-tools deploy --only functions"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "8.3.0",
+    "firebase-admin": "13.6.1",
+    "firebase-functions": "7.0.5",
+    "sarvamai": "1.1.3"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

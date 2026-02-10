@@ -31,4 +31,7 @@ export const elements = {
   deleteDialog: qs<HTMLDialogElement>("#delete-list-dialog"),
   confirmDeleteBtn: qs<HTMLButtonElement>("#confirm-delete-btn"),
   cancelDeleteBtn: qs<HTMLButtonElement>("#cancel-delete-btn"),
+  voiceHoldBtn: qs<HTMLButtonElement>("#voice-hold-btn"),
+  voiceReadBtn: qs<HTMLButtonElement>("#voice-read-btn"),
+  voiceStatus: qs<HTMLElement>("#voice-status"),
 };

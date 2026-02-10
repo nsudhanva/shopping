@@ -51,6 +51,26 @@ bunx firebase-tools deploy
 
 Enable Google provider in Firebase Auth Console and add your domains to authorized domains.
 
+### Cloud Functions (Voice Control)
+
+Voice control uses Firebase Cloud Functions in `us-east1` and Sarvam APIs for STT + intent parsing + TTS.
+
+```bash
+firebase functions:secrets:set SARVAM_API_KEY
+```
+
+Then deploy:
+
+```bash
+bunx firebase-tools deploy --only functions
+```
+
+Voice UX in app:
+- Hold `Hold to talk` and release to send command
+- Destructive voice actions require spoken confirmation (`yes`/`no`)
+- If ambiguous, app asks a follow-up clarification
+- Signed-out users can only use `Read list aloud`
+
 ## Firestore Rules
 
 Rules live in `firestore.rules`. Reads are public, writes require auth and strict schema.
@@ -62,6 +82,6 @@ Rules live in `firestore.rules`. Reads are public, writes require auth and stric
 
 ## GitHub Actions Deploy
 
-On push to `main`, the workflow deploys to Firebase Hosting.
+On push to `main`, the workflow deploys Firebase Hosting + Cloud Functions.
 
 Required secret: `FIREBASE_SERVICE_ACCOUNT_SUDHANVA_PERSONAL`
