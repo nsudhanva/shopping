@@ -7,6 +7,12 @@ import { SarvamAIClient } from "sarvamai";
 initializeApp();
 
 const sarvamApiKey = defineSecret("SARVAM_API_KEY");
+const defaultAllowedOrigins = [
+  "https://shopping.sudhanva.me",
+  "https://sudhanva-shopping-app.web.app",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+];
 
 type VoiceListContext = { id: string; name: string };
 type VoiceItemContext = {
@@ -72,6 +78,31 @@ function getClient(): SarvamAIClient {
     throw new HttpsError("failed-precondition", "Missing SARVAM_API_KEY secret");
   }
   return new SarvamAIClient({ apiSubscriptionKey: key });
+}
+
+function getConfiguredOrigins(): Set<string> {
+  const raw = (process.env.VOICE_ALLOWED_ORIGINS ?? defaultAllowedOrigins.join(",")).trim();
+  if (!raw) return new Set<string>();
+  return new Set(
+    raw
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0),
+  );
+}
+
+function assertAllowedOrigin(origin: string | undefined) {
+  // Requests without Origin are typically server-to-server; allow those.
+  if (!origin) return;
+
+  const allowed = getConfiguredOrigins();
+  if (allowed.size === 0) {
+    throw new HttpsError("failed-precondition", "VOICE_ALLOWED_ORIGINS is not configured.");
+  }
+  if (!allowed.has(origin)) {
+    logger.warn("Rejected callable request from disallowed origin", { origin });
+    throw new HttpsError("permission-denied", "Origin not allowed.");
+  }
 }
 
 function coerceString(value: unknown): string | undefined {
@@ -243,10 +274,11 @@ export const parseVoiceCommand = onCall(
     region: "us-east1",
     timeoutSeconds: 60,
     memory: "512MiB",
-    cors: ["http://localhost:3000", "http://127.0.0.1:3000"],
+    cors: true,
     secrets: [sarvamApiKey],
   },
   async (request): Promise<ParseVoiceResponse> => {
+    assertAllowedOrigin(request.rawRequest.headers.origin);
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Sign in is required for voice control.");
     }
@@ -335,10 +367,11 @@ export const speakText = onCall(
     region: "us-east1",
     timeoutSeconds: 60,
     memory: "256MiB",
-    cors: ["http://localhost:3000", "http://127.0.0.1:3000"],
+    cors: true,
     secrets: [sarvamApiKey],
   },
   async (request): Promise<{ audioBase64: string; mimeType: string }> => {
+    assertAllowedOrigin(request.rawRequest.headers.origin);
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Sign in is required for TTS.");
     }
