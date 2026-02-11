@@ -81,6 +81,7 @@ const speakText = httpsCallable<{ text: string }, SpeakResponse>(functions, "spe
 let mediaRecorder: MediaRecorder | null = null;
 let recordingChunks: BlobPart[] = [];
 let recordingActive = false;
+let processingVoice = false;
 let pendingClarification: Record<string, unknown> | null = null;
 
 function readStoredListId(): string | null {
@@ -552,7 +553,7 @@ async function processVoiceCommand(blob: Blob) {
 }
 
 async function startVoiceRecording() {
-  if (recordingActive) return;
+  if (recordingActive || processingVoice) return;
   if (!state.user) {
     setVoiceStatus("Sign in to use voice commands.");
     return;
@@ -566,6 +567,10 @@ async function startVoiceRecording() {
   };
 
   mediaRecorder.onstop = async () => {
+    recordingActive = false;
+    processingVoice = true;
+    elements.voiceHoldBtn.classList.remove("btn-error");
+    elements.voiceHoldBtn.textContent = "Processing...";
     try {
       const blob = new Blob(recordingChunks, { type: mediaRecorder?.mimeType || "audio/webm" });
       if (blob.size > 0) {
@@ -582,9 +587,12 @@ async function startVoiceRecording() {
       }
       recordingChunks = [];
       mediaRecorder = null;
-      recordingActive = false;
+      processingVoice = false;
       elements.voiceHoldBtn.classList.remove("btn-error");
       elements.voiceHoldBtn.textContent = "Hold to talk";
+      if (elements.voiceStatus.textContent === "Processing...") {
+        setVoiceStatus("Voice idle.");
+      }
     }
   };
 
@@ -597,8 +605,13 @@ async function startVoiceRecording() {
 
 function stopVoiceRecording() {
   if (!recordingActive || !mediaRecorder) return;
+  if (mediaRecorder.state !== "recording") return;
   setVoiceStatus("Processing...");
-  mediaRecorder.stop();
+  try {
+    mediaRecorder.stop();
+  } catch {
+    setVoiceStatus("Voice idle.");
+  }
 }
 
 const listHandlers = {
