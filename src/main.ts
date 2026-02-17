@@ -83,6 +83,7 @@ let recordingChunks: BlobPart[] = [];
 let recordingActive = false;
 let processingVoice = false;
 let pendingClarification: Record<string, unknown> | null = null;
+let activeVoicePointerId: number | null = null;
 
 function readStoredListId(): string | null {
   try {
@@ -906,20 +907,26 @@ elements.clearAllBtn.addEventListener("click", async () => {
 });
 
 elements.voiceHoldBtn.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0) return;
   event.preventDefault();
+  activeVoicePointerId = event.pointerId;
+  try {
+    elements.voiceHoldBtn.setPointerCapture(event.pointerId);
+  } catch {
+    // Pointer capture may fail on unsupported environments.
+  }
   void startVoiceRecording();
 });
 
-elements.voiceHoldBtn.addEventListener("pointerup", (event) => {
-  event.preventDefault();
+window.addEventListener("pointerup", (event) => {
+  if (activeVoicePointerId !== null && event.pointerId !== activeVoicePointerId) return;
+  activeVoicePointerId = null;
   stopVoiceRecording();
 });
 
-elements.voiceHoldBtn.addEventListener("pointerleave", () => {
-  stopVoiceRecording();
-});
-
-elements.voiceHoldBtn.addEventListener("pointercancel", () => {
+window.addEventListener("pointercancel", (event) => {
+  if (activeVoicePointerId !== null && event.pointerId !== activeVoicePointerId) return;
+  activeVoicePointerId = null;
   stopVoiceRecording();
 });
 
