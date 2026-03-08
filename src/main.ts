@@ -83,7 +83,9 @@ let recordingChunks: BlobPart[] = [];
 let recordingActive = false;
 let processingVoice = false;
 let pendingClarification: Record<string, unknown> | null = null;
-let activeVoicePointerId: number | null = null;
+let voiceTimerInterval: ReturnType<typeof setInterval> | null = null;
+let voiceStartTime = 0;
+let activeMediaStream: MediaStream | null = null;
 
 function readStoredListId(): string | null {
   try {
@@ -509,7 +511,8 @@ async function processVoiceCommand(blob: Blob) {
   }
 
   const audioBase64 = await blobToBase64(blob);
-  setVoiceStatus("Understanding command...");
+  setVoiceModalStatus("Understanding…");
+  setVoiceStatus("Understanding command…");
 
   let parsed = await parseVoiceCommand({
     audioBase64,
@@ -542,6 +545,7 @@ async function processVoiceCommand(blob: Blob) {
     pendingClarification = intent.pending ?? { transcript, options: intent.options ?? [] };
     const question = intent.question ?? parsed.data.responseText;
     setVoiceStatus(`Clarification needed: ${question}`);
+    showVoiceResult(question);
     await speakResponse(question);
     return;
   }
@@ -549,69 +553,167 @@ async function processVoiceCommand(blob: Blob) {
   pendingClarification = null;
 
   const response = await runIntent(intent);
-  setVoiceStatus(`Executed: ${response}`);
+  setVoiceStatus(`Done: ${response}`);
+  showVoiceResult(response);
   await speakResponse(response);
 }
 
-async function startVoiceRecording() {
+// --- Voice modal helpers ---
+
+function setVoiceModalStatus(text: string) {
+  elements.voiceModalStatus.textContent = text;
+}
+
+function startVoiceTimer() {
+  voiceStartTime = Date.now();
+  elements.voiceTimer.textContent = "0:00";
+  voiceTimerInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - voiceStartTime) / 1000);
+    const mins = Math.floor(elapsed / 60);
+    const secs = elapsed % 60;
+    elements.voiceTimer.textContent = `${mins}:${secs.toString().padStart(2, "0")}`;
+  }, 250);
+}
+
+function stopVoiceTimer() {
+  if (voiceTimerInterval) {
+    clearInterval(voiceTimerInterval);
+    voiceTimerInterval = null;
+  }
+}
+
+function setVoiceCircleState(state: "listening" | "processing" | "result" | "idle") {
+  elements.voiceCircle.classList.remove("listening", "processing", "result");
+  if (state !== "idle") {
+    elements.voiceCircle.classList.add(state);
+  }
+}
+
+function showVoiceResult(text: string) {
+  setVoiceCircleState("result");
+  setVoiceModalStatus("Done");
+  elements.voiceResultText.textContent = text;
+  elements.voiceResultText.classList.remove("hidden");
+  elements.voiceSendBtn.disabled = true;
+  elements.voiceCancelBtn.textContent = "Close";
+
+  // Auto-close after 2.5s
+  setTimeout(() => {
+    closeVoiceModal();
+  }, 2500);
+}
+
+function resetVoiceModalUi() {
+  setVoiceCircleState("idle");
+  setVoiceModalStatus("Listening…");
+  elements.voiceTimer.textContent = "0:00";
+  elements.voiceResultText.textContent = "";
+  elements.voiceResultText.classList.add("hidden");
+  elements.voiceSendBtn.disabled = false;
+  elements.voiceCancelBtn.textContent = "Cancel";
+}
+
+function cleanupMediaStream() {
+  if (activeMediaStream) {
+    for (const track of activeMediaStream.getTracks()) {
+      track.stop();
+    }
+    activeMediaStream = null;
+  }
+  recordingChunks = [];
+  mediaRecorder = null;
+  recordingActive = false;
+  processingVoice = false;
+}
+
+function closeVoiceModal() {
+  stopVoiceTimer();
+  // If still recording, abort silently
+  if (recordingActive && mediaRecorder && mediaRecorder.state === "recording") {
+    // Remove the onstop handler so it doesn't trigger processing
+    mediaRecorder.onstop = null;
+    try {
+      mediaRecorder.stop();
+    } catch {
+      // ignore
+    }
+  }
+  cleanupMediaStream();
+  resetVoiceModalUi();
+  elements.voiceModal.close();
+}
+
+async function openVoiceModal() {
   if (recordingActive || processingVoice) return;
   if (!state.user) {
     setVoiceStatus("Sign in to use voice commands.");
     return;
   }
 
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  recordingChunks = [];
-  mediaRecorder = new MediaRecorder(stream);
-  mediaRecorder.ondataavailable = (event: BlobEvent) => {
-    if (event.data.size > 0) recordingChunks.push(event.data);
-  };
+  // Reset and open
+  resetVoiceModalUi();
+  elements.voiceModal.showModal();
 
-  mediaRecorder.onstop = async () => {
-    recordingActive = false;
-    processingVoice = true;
-    elements.voiceHoldBtn.classList.remove("btn-error");
-    elements.voiceHoldBtn.textContent = "Processing...";
-    try {
-      const blob = new Blob(recordingChunks, { type: mediaRecorder?.mimeType || "audio/webm" });
-      if (blob.size > 0) {
-        await processVoiceCommand(blob);
-      } else {
-        setVoiceStatus("No voice captured. Try again.");
-      }
-    } catch {
-      setVoiceStatus("Voice command failed. Try again.");
-      await speakResponse("Sorry, I could not process that.");
-    } finally {
-      for (const track of stream.getTracks()) {
-        track.stop();
-      }
-      recordingChunks = [];
-      mediaRecorder = null;
-      processingVoice = false;
-      elements.voiceHoldBtn.classList.remove("btn-error");
-      elements.voiceHoldBtn.textContent = "Hold to talk";
-      if (elements.voiceStatus.textContent === "Processing...") {
-        setVoiceStatus("Voice idle.");
-      }
-    }
-  };
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    activeMediaStream = stream;
+    recordingChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
 
-  mediaRecorder.start();
-  recordingActive = true;
-  elements.voiceHoldBtn.classList.add("btn-error");
-  elements.voiceHoldBtn.textContent = "Listening... release to send";
-  setVoiceStatus("Listening...");
+    mediaRecorder.ondataavailable = (event: BlobEvent) => {
+      if (event.data.size > 0) recordingChunks.push(event.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+      stopVoiceTimer();
+      recordingActive = false;
+      processingVoice = true;
+
+      // Transition to processing state
+      setVoiceCircleState("processing");
+      setVoiceModalStatus("Processing…");
+      elements.voiceSendBtn.disabled = true;
+
+      try {
+        const blob = new Blob(recordingChunks, { type: mediaRecorder?.mimeType || "audio/webm" });
+        if (blob.size > 0) {
+          await processVoiceCommand(blob);
+        } else {
+          setVoiceStatus("No voice captured. Try again.");
+          showVoiceResult("No voice captured. Try again.");
+        }
+      } catch {
+        setVoiceStatus("Voice command failed. Try again.");
+        showVoiceResult("Something went wrong. Try again.");
+        await speakResponse("Sorry, I could not process that.");
+      } finally {
+        cleanupMediaStream();
+      }
+    };
+
+    mediaRecorder.start();
+    recordingActive = true;
+    setVoiceCircleState("listening");
+    startVoiceTimer();
+    setVoiceStatus("Listening…");
+  } catch {
+    setVoiceStatus("Microphone access denied.");
+    closeVoiceModal();
+  }
 }
 
-function stopVoiceRecording() {
+function sendVoiceRecording() {
   if (!recordingActive || !mediaRecorder) return;
   if (mediaRecorder.state !== "recording") return;
-  setVoiceStatus("Processing...");
+  stopVoiceTimer();
+  setVoiceModalStatus("Processing…");
+  setVoiceCircleState("processing");
+  elements.voiceSendBtn.disabled = true;
   try {
     mediaRecorder.stop();
   } catch {
-    setVoiceStatus("Voice idle.");
+    closeVoiceModal();
+    setVoiceStatus("Tap mic to speak");
   }
 }
 
@@ -756,8 +858,8 @@ onAuthStateChanged(auth, (user) => {
   maybeEnsureDefaultList();
   maybeBackfillListOrder();
 
-  elements.voiceHoldBtn.disabled = !state.user;
-  setVoiceStatus(state.user ? "Voice idle." : "Signed out. You can use Read list aloud only.");
+  elements.voiceMicBtn.disabled = !state.user;
+  setVoiceStatus(state.user ? "Tap mic to speak" : "Signed out. You can use Read list aloud only.");
 
   if (!state.user) {
     pendingClarification = null;
@@ -906,35 +1008,33 @@ elements.clearAllBtn.addEventListener("click", async () => {
   await clearAllItems(state.currentListId, getUserLabel());
 });
 
-elements.voiceHoldBtn.addEventListener("pointerdown", (event) => {
-  if (event.button !== 0) return;
-  event.preventDefault();
-  activeVoicePointerId = event.pointerId;
-  try {
-    elements.voiceHoldBtn.setPointerCapture(event.pointerId);
-  } catch {
-    // Pointer capture may fail on unsupported environments.
+elements.voiceMicBtn.addEventListener("click", () => {
+  void openVoiceModal();
+});
+
+elements.voiceSendBtn.addEventListener("click", () => {
+  sendVoiceRecording();
+});
+
+elements.voiceCancelBtn.addEventListener("click", () => {
+  closeVoiceModal();
+  setVoiceStatus("Tap mic to speak");
+});
+
+// Also close on backdrop click / Escape via dialog's native close event
+elements.voiceModal.addEventListener("close", () => {
+  // Cleanup if user dismissed via Escape or backdrop
+  if (recordingActive || processingVoice) {
+    closeVoiceModal();
   }
-  void startVoiceRecording();
-});
-
-window.addEventListener("pointerup", (event) => {
-  if (activeVoicePointerId !== null && event.pointerId !== activeVoicePointerId) return;
-  activeVoicePointerId = null;
-  stopVoiceRecording();
-});
-
-window.addEventListener("pointercancel", (event) => {
-  if (activeVoicePointerId !== null && event.pointerId !== activeVoicePointerId) return;
-  activeVoicePointerId = null;
-  stopVoiceRecording();
+  setVoiceStatus("Tap mic to speak");
 });
 
 elements.voiceReadBtn.addEventListener("click", async () => {
   const text = listReadoutText();
   setVoiceStatus("Reading list...");
   await speakResponse(text);
-  setVoiceStatus("Voice idle.");
+  setVoiceStatus("Tap mic to speak");
 });
 
 const storedTheme = (localStorage.getItem(themeKey) as "shopping-dark" | "shopping-light" | null) ?? "shopping-dark";
@@ -949,4 +1049,4 @@ elements.themeToggle.addEventListener("click", () => {
 });
 
 setAuthUi(state);
-setVoiceStatus("Voice idle.");
+setVoiceStatus("Tap mic to speak");

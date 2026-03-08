@@ -75,10 +75,17 @@
             <button type="submit" class="btn btn-primary">Add</button>
           </form>
 
-          <div class="mb-6 p-3 rounded-xl bg-base-200 flex flex-wrap items-center gap-2">
-            <button id="voice-hold-btn" type="button" class="btn btn-secondary">Hold to talk</button>
-            <button id="voice-read-btn" type="button" class="btn btn-outline">Read list aloud</button>
-            <span id="voice-status" class="text-sm text-muted">Voice idle.</span>
+          <div class="mb-6 p-3 rounded-xl bg-base-200 flex flex-wrap items-center gap-3">
+            <button id="voice-mic-btn" type="button" class="btn btn-secondary btn-circle btn-lg"
+              aria-label="Start voice command">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+                <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3z" />
+                <path
+                  d="M19 11a1 1 0 10-2 0 5 5 0 01-10 0 1 1 0 10-2 0 7 7 0 006 6.93V21H8a1 1 0 100 2h8a1 1 0 100-2h-3v-3.07A7 7 0 0019 11z" />
+              </svg>
+            </button>
+            <button id="voice-read-btn" type="button" class="btn btn-outline btn-sm">Read list aloud</button>
+            <span id="voice-status" class="text-sm text-muted">Tap mic to speak</span>
           </div>
 
           <!-- Items List -->
@@ -142,6 +149,49 @@
       <div class="modal-action">
         <button id="confirm-delete-btn" class="btn btn-error">Confirm</button>
         <button id="cancel-delete-btn" class="btn btn-ghost">Cancel</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop">
+      <button>close</button>
+    </form>
+  </dialog>
+
+  <!-- Voice Command Modal -->
+  <dialog id="voice-modal" class="modal modal-bottom sm:modal-middle">
+    <div class="modal-box flex flex-col items-center gap-6 py-10">
+      <!-- Pulsing mic circle -->
+      <div id="voice-circle" class="voice-circle">
+        <div class="voice-ring voice-ring-1"></div>
+        <div class="voice-ring voice-ring-2"></div>
+        <div class="voice-ring voice-ring-3"></div>
+        <div class="voice-circle-inner">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-10 h-10">
+            <path d="M12 14a3 3 0 003-3V5a3 3 0 10-6 0v6a3 3 0 003 3z" />
+            <path
+              d="M19 11a1 1 0 10-2 0 5 5 0 01-10 0 1 1 0 10-2 0 7 7 0 006 6.93V21H8a1 1 0 100 2h8a1 1 0 100-2h-3v-3.07A7 7 0 0019 11z" />
+          </svg>
+        </div>
+      </div>
+
+      <!-- Timer -->
+      <div id="voice-timer" class="font-mono text-3xl font-bold tabular-nums tracking-wider">0:00</div>
+
+      <!-- Status -->
+      <p id="voice-modal-status" class="text-lg font-medium text-base-content/70">Listening…</p>
+
+      <!-- Result text (hidden by default) -->
+      <p id="voice-result-text" class="text-base text-center hidden"></p>
+
+      <!-- Action buttons -->
+      <div class="flex gap-4 w-full max-w-xs">
+        <button id="voice-cancel-btn" type="button" class="btn btn-ghost flex-1">Cancel</button>
+        <button id="voice-send-btn" type="button" class="btn btn-primary flex-1">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+            <path
+              d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
+          </svg>
+          Send
+        </button>
       </div>
     </div>
     <form method="dialog" class="modal-backdrop">
