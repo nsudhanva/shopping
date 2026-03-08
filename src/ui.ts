@@ -60,6 +60,15 @@ function resolveUserLabel(name: string | undefined, id: string | undefined, curr
   return name ?? "unknown";
 }
 
+function toInitials(label: string): string {
+  if (label === "you" || label === "unknown") return label;
+  return label
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word[0].toUpperCase())
+    .join("");
+}
+
 export function setEditingEnabled(enabled: boolean) {
   elements.newItemInput.disabled = !enabled;
   const submitBtn = elements.newItemForm.querySelector('button[type="submit"]') as HTMLButtonElement;
@@ -194,7 +203,7 @@ export function renderLists(state: State, handlers: ListHandlers) {
         undefined,
         state.user?.uid ?? null,
       );
-      elements.activeListSubtitle.textContent = `${countLabel} · Created by ${createdBy} · Edited by ${updatedBy}`;
+      elements.activeListSubtitle.textContent = `${countLabel} · Created by ${toInitials(createdBy)} · Edited by ${toInitials(updatedBy)}`;
     }
   } else {
     elements.activeListSubtitle.textContent = "";
@@ -305,7 +314,7 @@ export function renderItems(state: State, handlers: ItemHandlers) {
     const updatedBy = resolveUserLabel(item.updatedByName ?? item.createdByName, undefined, state.user?.uid ?? null);
     const meta = document.createElement("div");
     meta.className = "text-xs text-base-content/50 mt-1";
-    meta.textContent = `Created by ${createdBy} · Edited by ${updatedBy}`;
+    meta.textContent = `Created by ${toInitials(createdBy)} · Edited by ${toInitials(updatedBy)}`;
     contentWrapper.appendChild(meta);
 
     desktopLeft.appendChild(contentWrapper);
