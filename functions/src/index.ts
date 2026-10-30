@@ -181,7 +181,7 @@ function normalizeIntent(raw: unknown): VoiceIntent {
     ? data.items
         .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
         .map((entry) => ({
-          text: coerceString(entry.text) ?? coerceString(entry.itemText) ?? "",
+          text: stripAmount(coerceString(entry.text) ?? coerceString(entry.itemText), coerceNumber(entry.quantity)) ?? "",
           quantity: coerceNumber(entry.quantity),
           unit: normalizeUnit(coerceString(entry.unit)),
         }))
@@ -192,7 +192,7 @@ function normalizeIntent(raw: unknown): VoiceIntent {
     type,
     itemId: coerceString(data.itemId),
     listId: coerceString(data.listId),
-    itemText: coerceString(data.itemText),
+    itemText: stripAmount(coerceString(data.itemText), coerceNumber(data.quantity)),
     listName: coerceString(data.listName),
     newText: coerceString(data.newText),
     newName: coerceString(data.newName),
@@ -216,6 +216,36 @@ function normalizeUnit(unit: string | undefined): string | undefined {
   if (["l", "lt", "ltr", "liter", "litre", "liters", "litres"].includes(cleaned)) return "L";
   if (["ml", "milliliter", "millilitre", "milliliters", "millilitres"].includes(cleaned)) return "ml";
   return unit.trim();
+}
+
+const numberWords: Record<string, number> = {
+  a: 1,
+  an: 1,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  twelve: 12,
+  dozen: 12,
+};
+const leadingAmount =
+  /^(\d+(?:\.\d+)?|[a-z]+)\s*(?:kilos?|kilograms?|kgs?|grams?|g|litres?|liters?|ltrs?|l|ml|millilit(?:er|re)s?|packets?|packs?|bottles?|cans?|box(?:es)?|bunch(?:es)?|loa(?:f|ves)|pieces?|pcs|dozen)?\s+(?:of\s+)?(.+)$/i;
+
+// The model sometimes keeps the amount in the item name ("two kilos of rice" with quantity 2 and unit kg).
+// Remove the amount only if its number is the parsed quantity, so a name such as "7 Up" stays the same.
+function stripAmount(text: string | undefined, quantity: number | undefined): string | undefined {
+  if (!text || quantity === undefined) return text;
+  const match = text.trim().match(leadingAmount);
+  if (!match) return text;
+  const word = match[1].toLowerCase();
+  const amount = numberWords[word] ?? Number.parseFloat(word);
+  return amount === quantity ? match[2].trim() : text;
 }
 
 function parseBulkItemsHeuristically(transcript: string): ParsedBulkItem[] {
