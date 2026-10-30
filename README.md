@@ -177,9 +177,3 @@ To deploy only the Firestore rules, run `bun run deploy:firestore`.
 
 3. Optional: set `VOICE_ALLOWED_ORIGINS` (a comma-separated list) in `functions/.env.<project id>`. If you do not set it, the functions use the list in `functions/src/index.ts`.
 4. In DNS, add a CNAME record from `shopping.sudhanva.me` to `sudhanva-shopping-app.web.app`. Add the TXT record that Firebase gives for verification.
-
-## Security
-
-- Anyone can read all lists. Any Google account can sign in, and each signed-in user can change or delete all lists. The rules check the fields and their lengths on each write.
-- The voice functions reject signed-out users and browser calls from origins that are not on the allowed list. They limit the input size before they call Sarvam. Each function runs on a maximum of 5 instances, because each call uses Sarvam credits.
-- Firebase Hosting sends security headers: `Content-Security-Policy` (`frame-ancestors 'none'`), `X-Content-Type-Options`, `Referrer-Policy` and `Permissions-Policy`.
