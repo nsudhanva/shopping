@@ -1,5 +1,7 @@
 node_modules/
-public/assets/
+dist/
+.tanstack/
+.output/
 scripts/
 .firebase/
 .firebaserc.local

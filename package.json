@@ -4,26 +4,38 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:css": "tailwindcss -i src/styles.css -o public/styles.css --minify",
-    "build:js": "bun build src/main.ts --outdir public/assets --target browser --format=esm --splitting --minify",
-    "build": "bun run build:css && bun run build:js",
+    "dev": "vite dev",
+    "build": "vite build",
+    "serve": "bunx serve dist/client",
     "typecheck": "tsc -p . && tsc -p functions",
     "lint": "biome check",
     "check": "bun run typecheck && bun run lint",
-    "serve": "bunx serve public",
-    "dev": "bun run build && bun run serve",
+    "lighthouse": "lighthouse --chrome-flags=--headless=new",
     "deploy": "bunx firebase-tools deploy",
     "deploy:hosting": "bunx firebase-tools deploy --only hosting",
     "deploy:firestore": "bunx firebase-tools deploy --only firestore"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.105.0",
+    "@tanstack/react-router": "^1.170.46",
+    "@tanstack/react-start": "^1.169.4",
     "daisyui": "^5.7.50",
     "firebase": "13.1.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
+    "@babel/core": "^8.0.10",
     "@biomejs/biome": "2.6.4",
-    "@tailwindcss/cli": "4.3.3",
-    "typescript": "7.0.2"
+    "@rolldown/plugin-babel": "^0.3.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "lighthouse": "^13.6.0",
+    "typescript": "7.0.2",
+    "vite": "^8.3.5"
   }
 }

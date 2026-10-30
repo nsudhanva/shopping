@@ -7,7 +7,7 @@ import { SarvamAIClient } from "sarvamai";
 initializeApp();
 
 const sarvamApiKey = defineSecret("SARVAM_API_KEY");
-// bulbul:v3 accepts up to 2500 characters per request.
+// bulbul:v3 accepts a maximum of 2500 characters in each request.
 const maxTtsChars = 2500;
 const defaultAllowedOrigins = [
   "https://shopping.sudhanva.me",
@@ -95,7 +95,7 @@ function getConfiguredOrigins(): Set<string> {
 }
 
 function assertAllowedOrigin(origin: string | undefined) {
-  // Requests without Origin are typically server-to-server; allow those.
+  // Requests without an Origin header are usually server-to-server. Allow them.
   if (!origin) return;
 
   const allowed = getConfiguredOrigins();
@@ -283,15 +283,19 @@ function editDistance(a: string, b: string): number {
 }
 
 function wordsMatch(a: string, b: string): boolean {
-  // Prefix covers plurals (egg/eggs, tomato/tomatoes); edit distance covers small mishearings.
+  // A prefix match covers plurals (egg/eggs, tomato/tomatoes). Edit distance covers small recognition errors.
   const [short, long] = a.length <= b.length ? [a, b] : [b, a];
   if (long.startsWith(short) && long.length - short.length <= 3) return true;
   return editDistance(a, b) <= Math.floor(Math.max(a.length, b.length) / 4);
 }
 
+// The code cannot compare speech in a different script (for example, Kannada) word by word, so it trusts the model.
+function isOtherScript(transcript: string): boolean {
+  return /[^\p{Script=Latin}\p{N}\p{P}\p{S}\s]/u.test(transcript);
+}
+
 function transcriptMentions(transcript: string, itemText: string): boolean {
-  // Item names in another script (e.g. Kannada) can't be compared word-for-word, so trust the model.
-  if (/[^\p{Script=Latin}\p{N}\p{P}\p{S}\s]/u.test(transcript)) return true;
+  if (isOtherScript(transcript)) return true;
   const itemWords = significantWords(itemText);
   if (itemWords.length === 0) return true;
   const spoken = significantWords(transcript);
@@ -302,7 +306,11 @@ function itemsMentioned(transcript: string, context: VoiceContext): VoiceItemCon
   return context.items.filter((entry) => transcriptMentions(transcript, entry.text));
 }
 
-// Answering "which item?" with an item name: apply the original action to it without asking the model.
+// When the user answers "which item?" with an item name, apply the original action to that item without the model.
+// "The bread" names an item. "Check off the milk" is a new command.
+const commandVerb =
+  /\b(add|buy|put|delete|remove|check|tick|cross|uncheck|untick|mark|set|change|edit|rename|move|clear|create|make|select|open|switch|read)\b/i;
+
 function resolveItemClarification(
   pending: Record<string, unknown> | null | undefined,
   transcript: string,
@@ -310,28 +318,61 @@ function resolveItemClarification(
 ): VoiceIntent | null {
   const original = normalizeIntent(pending?.originalIntent);
   if (!itemTargetingIntents.has(original.type)) return null;
+  // Send a reply that contains a command to the model. The model also gets the pending question.
+  if (commandVerb.test(transcript)) return null;
   const mentioned = itemsMentioned(transcript, context);
   return mentioned.length === 1 ? { ...original, itemId: mentioned[0].id } : null;
 }
 
-// The model sometimes maps an item that isn't on the list to an unrelated one ("delete the apples" ->
-// Bread). Correct it to the item actually named, or ask instead of acting on the wrong item.
+// The model sometimes maps an item that is not on the list to a different item ("delete the apples" ->
+// Bread). Change the intent to the item that the user named, or ask. Do not act on the wrong item.
 function guardItemIntent(intent: VoiceIntent, transcript: string, context: VoiceContext): VoiceIntent {
   if (!itemTargetingIntents.has(intent.type) || !intent.itemId) return intent;
   const item = context.items.find((entry) => entry.id === intent.itemId);
   if (item && transcriptMentions(transcript, item.text)) return intent;
-  // If exactly one item is actually mentioned, use that one.
+  // If the transcript names exactly one item, use that item.
   const mentioned = itemsMentioned(transcript, context);
   if (mentioned.length === 1) return { ...intent, itemId: mentioned[0].id };
   logger.info("Voice intent item not mentioned in transcript", { transcript, type: intent.type, item: item?.text });
+  return askWhichItem({ ...intent, itemId: undefined }, transcript, context);
+}
+
+// Asks which item `intent` is for. resolveItemClarification resolves the answer.
+function askWhichItem(intent: VoiceIntent, transcript: string, context: VoiceContext): VoiceIntent {
   const question = "I couldn't find that item on this list. Which item did you mean?";
   const options = context.items.slice(0, 5).map((entry) => entry.text);
   return {
     type: "clarify",
     question,
     options,
-    pending: { originalTranscript: transcript, originalIntent: { ...intent, itemId: undefined }, question, options },
+    pending: { originalTranscript: transcript, originalIntent: intent, question, options },
   };
+}
+
+// Bulk actions change all items (or the full list), so the user must ask for them clearly. If not, a
+// transcript that lost the item name ("check off the ...") could check all items.
+const bulkIntentWords: Record<string, RegExp> = {
+  check_all: /\b(all|every|everything|whole)\b/i,
+  uncheck_all: /\b(all|every|everything|whole)\b/i,
+  clear_all: /\b(all|every|everything|whole|empty)\b/i,
+  clear_checked: /\b(checked|ticked|done|completed|bought|crossed)\b/i,
+  delete_list: /\blist\b/i,
+};
+
+// The single-item action to ask about when the user did not clearly ask for a bulk action.
+const singleItemIntent: Record<string, string> = {
+  check_all: "check_item",
+  uncheck_all: "uncheck_item",
+  clear_all: "delete_item",
+  clear_checked: "delete_item",
+};
+
+function guardBulkIntent(intent: VoiceIntent, transcript: string, context: VoiceContext): VoiceIntent {
+  const required = bulkIntentWords[intent.type];
+  if (!required || isOtherScript(transcript) || required.test(transcript)) return intent;
+  logger.info("Bulk voice intent not explicitly requested", { transcript, type: intent.type });
+  const single = singleItemIntent[intent.type];
+  return single ? askWhichItem({ type: single }, transcript, context) : { type: "unknown" };
 }
 
 function basePrompt(forceBulk: boolean) {
@@ -356,13 +397,76 @@ function basePrompt(forceBulk: boolean) {
   ].join(" ");
 }
 
+// These limits are the same as the client and the Firestore rules. The function truncates larger values.
+const maxContextLists = 100;
+const maxContextItems = 200;
+const maxPendingChars = 4000;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function boundedString(value: unknown, maxLength: number): string {
+  return typeof value === "string" ? value.slice(0, maxLength) : "";
+}
+
+function sanitizeContext(value: unknown): VoiceContext | null {
+  if (!isRecord(value) || !Array.isArray(value.lists) || !Array.isArray(value.items)) return null;
+  return {
+    currentListId: typeof value.currentListId === "string" ? value.currentListId.slice(0, 128) : null,
+    currentListName: typeof value.currentListName === "string" ? value.currentListName.slice(0, 60) : null,
+    lists: value.lists
+      .slice(0, maxContextLists)
+      .filter(isRecord)
+      .map((list) => ({ id: boundedString(list.id, 128), name: boundedString(list.name, 60) })),
+    items: value.items
+      .slice(0, maxContextItems)
+      .filter(isRecord)
+      .map((item) => ({
+        id: boundedString(item.id, 128),
+        text: boundedString(item.text, 120),
+        checked: item.checked === true,
+        quantity: typeof item.quantity === "number" && Number.isFinite(item.quantity) ? item.quantity : 1,
+        unit: boundedString(item.unit, 16),
+      })),
+  };
+}
+
+// The pending clarification goes through the client. Discard it if it is too large, because a client changed it.
+function sanitizePending(value: unknown): Record<string, unknown> | null {
+  if (!isRecord(value)) return null;
+  return JSON.stringify(value).length <= maxPendingChars ? value : null;
+}
+
+// The formats that MediaRecorder makes: WebM or Ogg Opus (Chrome, Firefox) and MP4/AAC (Safari).
+const audioExtensions: Record<string, string> = {
+  "audio/webm": "webm",
+  "audio/ogg": "ogg",
+  "audio/mp4": "m4a",
+  "audio/aac": "aac",
+  "audio/mpeg": "mp3",
+  "audio/wav": "wav",
+};
+
+function parseAudioType(mimeType: string): { mime: string; extension: string } | null {
+  const mime = mimeType.split(";")[0].trim().toLowerCase();
+  const extension = audioExtensions[mime];
+  return extension ? { mime, extension } : null;
+}
+
+const sarvamCallOptions = {
+  region: "us-east1",
+  timeoutSeconds: 60,
+  cors: true,
+  // Each call uses Sarvam credits. Limit how far a traffic burst can scale.
+  maxInstances: 5,
+  secrets: [sarvamApiKey],
+};
+
 export const parseVoiceCommand = onCall(
   {
-    region: "us-east1",
-    timeoutSeconds: 60,
+    ...sarvamCallOptions,
     memory: "512MiB",
-    cors: true,
-    secrets: [sarvamApiKey],
   },
   async (request): Promise<ParseVoiceResponse> => {
     assertAllowedOrigin(request.rawRequest.headers.origin);
@@ -370,9 +474,18 @@ export const parseVoiceCommand = onCall(
       throw new HttpsError("unauthenticated", "Sign in is required for voice control.");
     }
 
-    const data = request.data as ParseVoiceRequest | undefined;
-    if (!data?.audioBase64 || !data?.mimeType || !data?.context) {
+    // The client supplies all values below. Validate and limit them before any paid API call.
+    const data = request.data as Partial<Record<keyof ParseVoiceRequest, unknown>> | undefined;
+    const context = sanitizeContext(data?.context);
+    if (typeof data?.audioBase64 !== "string" || !data.audioBase64 || !context) {
       throw new HttpsError("invalid-argument", "Missing audio or context.");
+    }
+    const pendingClarification = sanitizePending(data.pendingClarification);
+    const forceBulk = data.forceBulk === true;
+
+    const audioType = typeof data.mimeType === "string" ? parseAudioType(data.mimeType) : null;
+    if (!audioType) {
+      throw new HttpsError("invalid-argument", "Unsupported audio format.");
     }
 
     const audioBuffer = Buffer.from(data.audioBase64, "base64");
@@ -391,14 +504,15 @@ export const parseVoiceCommand = onCall(
     let transcript: string;
     try {
       const stt = await client.speechToText.transcribe({
-        file: audioBuffer,
+        // Give a name and a type, so Sarvam does not have to find the format from the bytes.
+        file: { data: audioBuffer, filename: `command.${audioType.extension}`, contentType: audioType.mime },
         model: "saaras:v4",
         mode: "codemix",
         language_code: "unknown",
       });
       transcript = (stt.transcript ?? "").trim();
     } catch (error) {
-      // Very short or silent recordings come back as 400 "Failed to read the file".
+      // Sarvam returns 400 "Failed to read the file" for very short or silent recordings.
       if ((error as { statusCode?: number }).statusCode === 400) {
         logger.warn("Speech-to-text rejected the audio", { bytes: audioBuffer.length, mimeType: data.mimeType, error });
         return unheard;
@@ -410,7 +524,7 @@ export const parseVoiceCommand = onCall(
       return unheard;
     }
 
-    const resolved = resolveItemClarification(data.pendingClarification, transcript, data.context);
+    const resolved = resolveItemClarification(pendingClarification, transcript, context);
     if (resolved) {
       return { transcript, intent: resolved, responseText: "Done." };
     }
@@ -419,23 +533,23 @@ export const parseVoiceCommand = onCall(
       model: "sarvam-105b",
       temperature: 0.05,
       max_tokens: 300,
-      // sarvam-105b reasons by default and can spend the whole token budget before emitting JSON.
+      // sarvam-105b reasons by default and can use all of the token budget before it writes JSON.
       reasoning_effort: null as unknown as undefined,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: basePrompt(Boolean(data.forceBulk)) },
+        { role: "system", content: basePrompt(forceBulk) },
         {
           role: "user",
           content: JSON.stringify({
             transcript,
-            forceBulk: Boolean(data.forceBulk),
+            forceBulk,
             context: {
-              currentListId: data.context.currentListId,
-              currentListName: data.context.currentListName,
-              lists: data.context.lists.slice(0, 100),
-              items: data.context.items.slice(0, 200),
+              currentListId: context.currentListId,
+              currentListName: context.currentListName,
+              lists: context.lists,
+              items: context.items,
             },
-            pendingClarification: data.pendingClarification ?? null,
+            pendingClarification,
           }),
         },
       ],
@@ -447,7 +561,7 @@ export const parseVoiceCommand = onCall(
 
     if (intent.type !== "add_items_bulk") {
       const heuristicItems = parseBulkItemsHeuristically(transcript);
-      if (heuristicItems.length >= 2 && (Boolean(data.forceBulk) || intent.type === "add_item")) {
+      if (heuristicItems.length >= 2 && (forceBulk || intent.type === "add_item")) {
         intent = {
           type: "add_items_bulk",
           items: heuristicItems,
@@ -455,7 +569,7 @@ export const parseVoiceCommand = onCall(
       }
     }
 
-    intent = guardItemIntent(intent, transcript, data.context);
+    intent = guardBulkIntent(guardItemIntent(intent, transcript, context), transcript, context);
 
     let responseText = "Done.";
     if (intent.type === "clarify") {
@@ -474,11 +588,8 @@ export const parseVoiceCommand = onCall(
 
 export const speakText = onCall(
   {
-    region: "us-east1",
-    timeoutSeconds: 60,
+    ...sarvamCallOptions,
     memory: "256MiB",
-    cors: true,
-    secrets: [sarvamApiKey],
   },
   async (request): Promise<{ audioBase64: string; mimeType: string }> => {
     assertAllowedOrigin(request.rawRequest.headers.origin);

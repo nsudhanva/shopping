@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @plugin "daisyui";
 
-/* Custom dark theme for shopping app */
+/* Dark theme */
 @plugin "daisyui/theme" {
     name: "shopping-dark";
     default: true;
@@ -39,7 +39,7 @@
     --noise: 0;
 }
 
-/* Light theme variant */
+/* Light theme */
 @plugin "daisyui/theme" {
     name: "shopping-light";
     prefersdark: false;
@@ -70,7 +70,7 @@
     --radius-box: 1rem;
 }
 
-/* Custom base styles */
+/* Base styles */
 @layer base {
     body {
         background: radial-gradient(circle at top right, oklch(72% 0.18 155 / 0.08), transparent 35%),
@@ -79,7 +79,7 @@
     }
 }
 
-/* Custom utilities */
+/* Utilities */
 @layer utilities {
     .text-muted {
         opacity: 0.6;
@@ -129,6 +129,12 @@
 
     .voice-circle.listening .voice-ring-3 {
         animation-delay: 0.8s;
+    }
+
+    /* --voice-level (0 to 1) is the live microphone level. The recorder sets it. */
+    .voice-circle.listening .voice-circle-inner {
+        transform: scale(calc(1 + var(--voice-level, 0) * 0.3));
+        transition: transform 0.08s linear;
     }
 
     .voice-circle.processing .voice-circle-inner {

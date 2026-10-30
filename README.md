@@ -1,35 +1,35 @@
 # Shopping
 
-Fast, shared shopping lists built with Bun + TypeScript + Firebase + daisyUI.
+Shared shopping lists with voice commands. The app uses React, TanStack Start, Firebase and daisyUI.
 
 ## Features
 
-- Shared lists with items (public read, Google-auth write)
-- Add, edit, check/uncheck, delete items
-- Inline quantity per item (decimal, defaults to 1) with +/- controls
-- Optional unit per item (e.g., kg, lb)
-- Check all / Uncheck all / Clear checked / Clear all
-- Rename lists (header + sidebar)
-- Delete lists with choice to delete items or move them to Inbox
-- Reorder lists and items
-- Created/edited-by metadata for lists and items
-- Voice commands (add items, check/uncheck, delete, navigate lists)
-- Text-to-speech responses and list readout
-- Dark mode default with light mode toggle
-- Mobile hamburger drawer for Lists (CSS-only)
-- Remembers the last selected list across tab closes
-- Responsive layout with left nav
+- Shared lists. All users can read the lists. Users who sign in with Google can change them.
+- Add, edit, check, uncheck and delete items.
+- Set a quantity for each item (decimal, default 1) with the − and + buttons.
+- Set an optional unit for each item, for example kg or lb.
+- Check all items, uncheck all items, clear the checked items or clear all items in a list.
+- Rename a list from the header or from the sidebar.
+- Delete a list. You can delete its items or move them to Inbox.
+- Move lists and items up and down.
+- See who created and who last edited each list and item.
+- Give voice commands to add, check, uncheck and delete items, and to change lists.
+- Hear the replies, and hear the full list read aloud.
+- Use the dark theme (default) or the light theme.
+- On a phone, open the lists with the menu button.
+- The app shows the last list that you selected, also after you close the tab.
+- Each list has a link (`/?list=<id>`). Back and Forward move between lists.
 
 ## Architecture
 
-### High-Level Overview
+### Overview
 
 ```mermaid
 graph TB
     subgraph Client["Browser (SPA)"]
-        HTML["index.html"]
+        HTML["Prerendered index.html"]
         CSS["Tailwind CSS v4 + daisyUI v5"]
-        TS["TypeScript Modules"]
+        TS["React 19 + TanStack Router/Query"]
     end
 
     subgraph Firebase["Firebase Platform"]
@@ -54,43 +54,28 @@ graph TB
     style External fill:#1b2838,stroke:#2a4858,color:#e0e0e0
 ```
 
-### Frontend Module Graph
+### Frontend modules
 
 ```mermaid
 graph LR
-    main["main.ts<br/><i>Entry point, event wiring,<br/>voice pipeline</i>"]
-    ui["ui.ts<br/><i>DOM rendering for<br/>lists and items</i>"]
-    elements["elements.ts<br/><i>Cached DOM element<br/>references</i>"]
-    firestore["firestore.ts<br/><i>Firestore CRUD +<br/>real-time subscriptions</i>"]
-    firebase["firebase.ts<br/><i>Firebase app init,<br/>auth, functions</i>"]
-    state["state.ts<br/><i>App state interface<br/>+ initial state</i>"]
-    types["types.ts<br/><i>ListDoc, ItemDoc<br/>type definitions</i>"]
-    dom["dom.ts<br/><i>qs() helper</i>"]
-    styles["styles.css<br/><i>Themes, animations</i>"]
+    routes["routes/<br/><i>__root (document, head)<br/>index (?list= search)</i>"]
+    app["components/ShoppingApp<br/><i>Layout + drawer</i>"]
+    ui["components/*<br/><i>Navbar, ListsSidebar,<br/>ActiveList, ItemRow, VoiceBar</i>"]
+    shopping["lib/shopping<br/><i>Context: user, lists, items,<br/>selection, reordering</i>"]
+    live["lib/live-data<br/><i>Firestore snapshots →<br/>TanStack Query cache</i>"]
+    firestore["lib/firestore<br/><i>Firestore CRUD +<br/>subscriptions</i>"]
+    firebase["lib/firebase + auth<br/><i>App init, lazy sign-in<br/>and Cloud Functions</i>"]
+    voice["voice/*<br/><i>Modal + intents<br/>(lazy chunk)</i>"]
 
-    main --> ui
-    main --> elements
-    main --> firestore
-    main --> firebase
-    main --> state
-    ui --> elements
-    ui --> types
-    elements --> dom
-    firestore --> firebase
-    firestore --> types
-
-    style main fill:#2d6a4f,stroke:#40916c,color:#fff
-    style ui fill:#264653,stroke:#2a9d8f,color:#fff
-    style firestore fill:#264653,stroke:#2a9d8f,color:#fff
-    style firebase fill:#264653,stroke:#2a9d8f,color:#fff
-    style elements fill:#3a506b,stroke:#5bc0be,color:#fff
-    style state fill:#3a506b,stroke:#5bc0be,color:#fff
-    style types fill:#3a506b,stroke:#5bc0be,color:#fff
-    style dom fill:#3a506b,stroke:#5bc0be,color:#fff
-    style styles fill:#6b3a5c,stroke:#be5ba3,color:#fff
+    routes --> app --> ui
+    ui --> shopping
+    ui -.->|first mic tap| voice
+    shopping --> live --> firestore --> firebase
+    voice --> shopping
+    voice --> firebase
 ```
 
-### Data Model
+### Data model
 
 ```mermaid
 erDiagram
@@ -123,12 +108,12 @@ erDiagram
     LIST ||--o{ ITEM : "contains"
 ```
 
-### Voice Command Pipeline
+### Voice command flow
 
 ```mermaid
 flowchart LR
-    Mic["🎤 Tap Mic"] --> Modal["Voice Modal<br/>(recording)"]
-    Modal --> Send["Tap Send"]
+    Mic["Tap mic"] --> Modal["Voice modal<br/>(records)"]
+    Modal --> Send["Pause or<br/>tap Send"]
     Send --> B64["Base64 encode<br/>audio blob"]
     B64 --> CF["Cloud Function<br/><b>parseVoiceCommand</b>"]
 
@@ -142,14 +127,14 @@ flowchart LR
     Intent --> Execute["Execute intent<br/>(add/edit/delete/...)"]
     Execute --> TTS["Cloud Function<br/><b>speakText</b>"]
     TTS --> SarvamTTS["Sarvam TTS<br/>(bulbul:v3)"]
-    SarvamTTS --> Audio["🔊 Play audio"]
+    SarvamTTS --> Audio["Play audio"]
 
     style Mic fill:#2d6a4f,stroke:#40916c,color:#fff
     style Modal fill:#2d6a4f,stroke:#40916c,color:#fff
     style CloudFunction fill:#1b2838,stroke:#2a4858,color:#e0e0e0
 ```
 
-### Voice Intent Types
+### Voice intents
 
 ```mermaid
 mindmap
@@ -181,22 +166,21 @@ mindmap
             unknown
 ```
 
-### Deployment Flow
+### Deployment
 
 ```mermaid
 flowchart TB
     Push["Push to main"] --> GHA["GitHub Actions"]
 
     subgraph Pipeline["CI/CD Pipeline"]
-        GHA --> BuildCSS["Build CSS<br/>(Tailwind CLI)"]
-        GHA --> BuildJS["Build JS<br/>(Bun bundler)"]
-        GHA --> BuildFn["Build Functions<br/>(tsc)"]
-        BuildCSS --> Deploy
-        BuildJS --> Deploy
+        GHA --> Check["Typecheck + lint<br/>(tsc, Biome)"]
+        Check --> BuildWeb["Build + prerender<br/>(Vite, TanStack Start)"]
+        Check --> BuildFn["Build Functions<br/>(tsc)"]
+        BuildWeb --> Deploy
         BuildFn --> Deploy
     end
 
-    Deploy["Firebase Deploy"] --> Hosting["Firebase Hosting<br/>(static files)"]
+    Deploy["Firebase Deploy"] --> Hosting["Firebase Hosting<br/>(dist/client)"]
     Deploy --> Functions["Cloud Functions<br/>(Node 24, us-east1)"]
 
     Hosting --> CF["Cloudflare DNS"]
@@ -207,7 +191,7 @@ flowchart TB
     style Domain fill:#6b3a5c,stroke:#be5ba3,color:#fff
 ```
 
-### Authentication & Authorization
+### Sign-in and access
 
 ```mermaid
 stateDiagram-v2
@@ -227,42 +211,49 @@ stateDiagram-v2
 
     state SignedIn {
         [*] --> FullAccess
-        FullAccess: All CRUD operations
-        FullAccess: Voice commands
-        FullAccess: Reordering
-        FullAccess: List management
+        FullAccess: Can add, edit and delete
+        FullAccess: Can use voice commands
+        FullAccess: Can reorder
+        FullAccess: Can manage lists
     }
 ```
 
 ## Tech
 
-- Bun + Vanilla TypeScript
-- Tailwind CSS v4 + daisyUI v5 for styling
-- Firebase Hosting + Firestore (Native mode)
-- Firebase Auth (Google)
-- Sarvam AI (STT, TTS, Chat)
+- React 19 with React Compiler. Vite builds the app.
+- TanStack Start prerenders `/` to static HTML.
+- TanStack Router keeps the selected list in a typed `?list=` search parameter.
+- TanStack Query holds the live Firestore data.
+- Tailwind CSS v4 and daisyUI v5 for styles.
+- Firebase Hosting, Firestore (Native mode) and Firebase Auth (Google).
+- Sarvam AI for speech to text, intent parsing and text to speech.
 
 ## Setup
 
 ```bash
 bun install
-bun run build
-bun run serve
+bun run dev        # http://localhost:3000
 ```
 
-Open `http://localhost:3000`
-
-### Dev Loop
+The production build prerenders `/` into `dist/client`. Firebase Hosting serves this folder.
 
 ```bash
-bun run dev
+bun run build
+bun run serve      # serves dist/client
 ```
 
 ### Checks
 
 ```bash
 bun install --cwd functions
-bun run check   # tsc (app + functions) and biome
+bun run check   # tsc (app and functions) and Biome
+```
+
+### Lighthouse
+
+```bash
+bun run lighthouse https://shopping.sudhanva.me/
+bun run lighthouse https://shopping.sudhanva.me/ --preset=desktop
 ```
 
 ## Firebase
@@ -273,41 +264,50 @@ bunx firebase-tools use sudhanva-personal
 bunx firebase-tools deploy
 ```
 
-Enable Google provider in Firebase Auth Console and add your domains to authorized domains.
+In the Firebase Auth console, enable the Google provider. Add your domains to the authorized domains.
 
-### Cloud Functions (Voice Control)
+### Cloud Functions (voice)
 
-Voice control uses Firebase Cloud Functions in `us-east1` and Sarvam APIs for STT + intent parsing + TTS.
+The voice functions run in `us-east1`. They use Sarvam for speech to text, intent parsing and text to speech. Set the API key:
 
 ```bash
 firebase functions:secrets:set SARVAM_API_KEY
 ```
 
-Then deploy:
+Deploy the functions:
 
 ```bash
 bunx firebase-tools deploy --only functions
 ```
 
-Voice UX in app:
+The functions accept calls only from signed-in users. They also reject browser calls from origins that are not in `VOICE_ALLOWED_ORIGINS`. If you do not set this variable, the functions use the default list in `functions/src/index.ts`.
 
-- Tap the mic button to open the voice modal
-- Speak your command, then tap Send
-- App transcribes → parses intent → executes → speaks result
-- If ambiguous, app asks a follow-up clarification
-- Signed-out users can only use `Read list aloud`
+### Voice commands
 
-## Firestore Rules
+1. Tap the mic. "Listening…" shows when the microphone records, so the app does not lose your first words.
+2. Say the command. A level meter shows that the microphone hears you.
+3. Stop speaking. After a pause of about 2 seconds, the app sends the command. You can also tap Send.
+4. The app converts the speech to text, finds the intent, does the action and speaks the result.
+5. If the command is not clear, the app asks a question. Then it listens for the answer immediately.
 
-Rules live in `firestore.rules`. Reads are public, writes require auth and strict schema.
+Audio details:
 
-## Cloudflare DNS (Optional)
+- The browser records mono audio with echo cancellation, noise suppression and automatic gain. Chrome and Firefox record Opus. Safari records AAC.
+- The app releases the microphone when the recording stops.
+- If you do not speak for 8 seconds, the recording stops. The app does not send silent audio to the server.
+- Users who are not signed in can only use "Read list aloud".
 
-- CNAME `shopping.sudhanva.me` → `sudhanva-shopping-app.web.app`
-- Add the TXT record for domain verification
+## Firestore rules
 
-## GitHub Actions Deploy
+The rules are in `firestore.rules`. All users can read the lists. A write needs a signed-in user and must match the schema. Any Google account can sign in, so any signed-in user can change or delete all lists.
 
-On push to `main`, the workflow deploys Firebase Hosting + Cloud Functions.
+## Cloudflare DNS (optional)
+
+- Add a CNAME record from `shopping.sudhanva.me` to `sudhanva-shopping-app.web.app`.
+- Add the TXT record for domain verification.
+
+## GitHub Actions deploy
+
+When you push to `main`, the workflow checks the code, builds the app and deploys Firebase Hosting and Cloud Functions.
 
 Required secret: `FIREBASE_SERVICE_ACCOUNT_SUDHANVA_PERSONAL`

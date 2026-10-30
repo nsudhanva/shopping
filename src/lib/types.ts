@@ -26,17 +26,3 @@ export type ItemDoc = {
   orderMissing?: boolean;
   quantityMissing?: boolean;
 };
-
-export type State = {
-  user: import("firebase/auth").User | null;
-  lists: ListDoc[];
-  items: ItemDoc[];
-  currentListId: string | null;
-  listsLoaded: boolean;
-  ensureDefaultInFlight: boolean;
-  editingItemId: string | null;
-  editingItemText: string;
-  backfillListsInFlight: boolean;
-  listOrderBackfilled: boolean;
-  backfilledItemLists: Set<string>;
-};

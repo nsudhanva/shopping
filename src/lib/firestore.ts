@@ -11,6 +11,7 @@ import {
   query,
   serverTimestamp,
   updateDoc,
+  type WriteBatch,
   writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -94,18 +95,18 @@ function mapItems(snapshot: QuerySnapshot<DocumentData>): ItemDoc[] {
   });
 }
 
+function logListenError(error: Error) {
+  console.warn("Firestore listener failed", error);
+}
+
 export function subscribeLists(onChange: (lists: ListDoc[]) => void): () => void {
   const listsQuery = query(listCollection, orderBy("order", "asc"));
-  return onSnapshot(listsQuery, (snapshot) => {
-    onChange(mapList(snapshot));
-  });
+  return onSnapshot(listsQuery, (snapshot) => onChange(mapList(snapshot)), logListenError);
 }
 
 export function subscribeItems(listId: string, onChange: (items: ItemDoc[]) => void): () => void {
   const itemsQuery = query(collection(db, "lists", listId, "items"), orderBy("order", "asc"));
-  return onSnapshot(itemsQuery, (snapshot) => {
-    onChange(mapItems(snapshot));
-  });
+  return onSnapshot(itemsQuery, (snapshot) => onChange(mapItems(snapshot)), logListenError);
 }
 
 export async function createList(params: {
@@ -194,70 +195,42 @@ export async function deleteItem(listId: string, itemId: string, userName: strin
   await touchList(listId, userName);
 }
 
-function chunkDocs<T>(items: T[], size: number): T[][] {
-  const result: T[][] = [];
-  for (let i = 0; i < items.length; i += size) {
-    result.push(items.slice(i, i + size));
+// Firestore allows 500 writes in each batch. Use a lower number for a safety margin.
+async function commitInBatches<T>(entries: T[], write: (batch: WriteBatch, entry: T) => void) {
+  for (let i = 0; i < entries.length; i += 400) {
+    const batch = writeBatch(db);
+    for (const entry of entries.slice(i, i + 400)) write(batch, entry);
+    await batch.commit();
   }
-  return result;
+}
+
+function itemsOf(listId: string) {
+  return getDocs(collection(db, "lists", listId, "items"));
 }
 
 export async function updateAllItems(listId: string, checked: boolean, userName: string) {
-  const itemsSnap = await getDocs(collection(db, "lists", listId, "items"));
-  const batches = chunkDocs(itemsSnap.docs, 400);
-  for (const batchDocs of batches) {
-    const batch = writeBatch(db);
-    for (const item of batchDocs) {
-      batch.update(item.ref, {
-        checked,
-        updatedAt: serverTimestamp(),
-        updatedByName: userName,
-      });
-    }
-    await batch.commit();
-  }
+  const itemsSnap = await itemsOf(listId);
+  await commitInBatches(itemsSnap.docs, (batch, item) =>
+    batch.update(item.ref, { checked, updatedAt: serverTimestamp(), updatedByName: userName }),
+  );
   await touchList(listId, userName);
 }
 
 export async function clearAllItems(listId: string, userName: string) {
-  const itemsSnap = await getDocs(collection(db, "lists", listId, "items"));
-  const batches = chunkDocs(itemsSnap.docs, 400);
-  for (const batchDocs of batches) {
-    const batch = writeBatch(db);
-    for (const item of batchDocs) {
-      batch.delete(item.ref);
-    }
-    await batch.commit();
-  }
+  const itemsSnap = await itemsOf(listId);
+  await commitInBatches(itemsSnap.docs, (batch, item) => batch.delete(item.ref));
   await touchList(listId, userName);
 }
 
 export async function clearCheckedItems(listId: string, userName: string) {
-  const itemsSnap = await getDocs(collection(db, "lists", listId, "items"));
+  const itemsSnap = await itemsOf(listId);
   const checkedDocs = itemsSnap.docs.filter((docSnap) => Boolean(docSnap.data().checked));
-  const batches = chunkDocs(checkedDocs, 400);
-  for (const batchDocs of batches) {
-    const batch = writeBatch(db);
-    for (const item of batchDocs) {
-      batch.delete(item.ref);
-    }
-    await batch.commit();
-  }
+  await commitInBatches(checkedDocs, (batch, item) => batch.delete(item.ref));
   await touchList(listId, userName);
 }
 
-export async function ensureDefaultListId(params: {
-  existingId?: string;
-  userId: string;
-  userName: string;
-}): Promise<string> {
-  if (params.existingId) return params.existingId;
-  return createList({
-    name: "Inbox",
-    userId: params.userId,
-    userName: params.userName,
-    isDefault: true,
-  });
+export function createDefaultList(params: { userId: string; userName: string }): Promise<string> {
+  return createList({ name: "Inbox", userId: params.userId, userName: params.userName, isDefault: true });
 }
 
 export async function deleteListWithItems(params: {
@@ -267,85 +240,57 @@ export async function deleteListWithItems(params: {
   userId: string;
   userName: string;
 }) {
-  const itemsSnap = await getDocs(collection(db, "lists", params.listId, "items"));
-  const itemDocs = itemsSnap.docs;
-  // Moving items into the list being deleted would delete them along with it.
-  const defaultListId = params.keepItems
-    ? await ensureDefaultListId({
-        existingId: params.defaultListId === params.listId ? undefined : params.defaultListId,
-        userId: params.userId,
-        userName: params.userName,
-      })
+  const itemsSnap = await itemsOf(params.listId);
+  // Do not move items into the list that the user deletes. Firestore would delete them with that list.
+  const usableDefault = params.defaultListId === params.listId ? undefined : params.defaultListId;
+  const targetListId = params.keepItems
+    ? (usableDefault ?? (await createDefaultList({ userId: params.userId, userName: params.userName })))
     : null;
 
-  const batches = chunkDocs(itemDocs, 400);
-  for (const batchDocs of batches) {
-    const batch = writeBatch(db);
-    for (const item of batchDocs) {
-      if (params.keepItems && defaultListId) {
-        const targetRef = doc(db, "lists", defaultListId, "items", item.id);
-        const data = item.data();
-        const order = isFiniteNumber(data.order) ? data.order : toDate(data.createdAt).getTime();
-        const quantity = isFiniteNumber(data.quantity) ? data.quantity : 1;
-        const unit = typeof data.unit === "string" ? data.unit : "";
-        batch.set(targetRef, {
-          text: String(data.text ?? ""),
-          checked: Boolean(data.checked),
-          quantity,
-          unit,
-          createdAt: data.createdAt ?? serverTimestamp(),
-          updatedAt: serverTimestamp(),
-          createdBy: params.userId,
-          createdByName: params.userName,
-          updatedByName: params.userName,
-          order,
-        });
-      }
-      batch.delete(item.ref);
+  await commitInBatches(itemsSnap.docs, (batch, item) => {
+    if (targetListId) {
+      const data = item.data();
+      // The rules require createdBy to be the writer, so moved items get the current user as createdBy.
+      batch.set(doc(db, "lists", targetListId, "items", item.id), {
+        text: String(data.text ?? ""),
+        checked: Boolean(data.checked),
+        quantity: resolveQuantity(data).quantity,
+        unit: resolveUnit(data),
+        createdAt: data.createdAt ?? serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        createdBy: params.userId,
+        createdByName: params.userName,
+        updatedByName: params.userName,
+        order: resolveOrder(data).order,
+      });
     }
-    await batch.commit();
-  }
+    batch.delete(item.ref);
+  });
 
   await deleteDoc(doc(db, "lists", params.listId));
+}
+
+// Gives an `order` from the creation time to entries that have none. Their relative order stays the same.
+function backfillOrders<T extends { createdAt: Date }>(entries: T[]) {
+  return [...entries]
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    .map((entry, index) => ({ entry, fallbackOrder: entry.createdAt.getTime() + index }));
 }
 
 export async function backfillListOrder(userName: string) {
   const snapshot = await getDocs(listCollection);
   const missing = snapshot.docs
-    .map((docSnap) => {
-      const data = docSnap.data();
-      return {
-        ref: docSnap.ref,
-        createdAt: toDate(data.createdAt),
-        order: isFiniteNumber(data.order) ? data.order : null,
-      };
-    })
-    .filter((entry) => entry.order === null);
-
+    .filter((docSnap) => !isFiniteNumber(docSnap.data().order))
+    .map((docSnap) => ({ ref: docSnap.ref, createdAt: toDate(docSnap.data().createdAt) }));
   if (missing.length === 0) return;
 
-  missing.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  const updates = missing.map((entry, index) => ({
-    ref: entry.ref,
-    order: entry.createdAt.getTime() + index,
-  }));
-
-  const batches = chunkDocs(updates, 400);
-  for (const batchDocs of batches) {
-    const batch = writeBatch(db);
-    for (const entry of batchDocs) {
-      batch.update(entry.ref, {
-        order: entry.order,
-        updatedAt: serverTimestamp(),
-        updatedByName: userName,
-      });
-    }
-    await batch.commit();
-  }
+  await commitInBatches(backfillOrders(missing), (batch, { entry, fallbackOrder }) =>
+    batch.update(entry.ref, { order: fallbackOrder, updatedAt: serverTimestamp(), updatedByName: userName }),
+  );
 }
 
 export async function backfillItemOrder(listId: string, userName: string) {
-  const itemsSnap = await getDocs(collection(db, "lists", listId, "items"));
+  const itemsSnap = await itemsOf(listId);
   const missing = itemsSnap.docs
     .map((docSnap) => {
       const data = docSnap.data();
@@ -357,53 +302,36 @@ export async function backfillItemOrder(listId: string, userName: string) {
       };
     })
     .filter((entry) => entry.order === null || entry.quantity === null);
-
   if (missing.length === 0) return;
 
-  missing.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  const updates = missing.map((entry, index) => ({
-    ref: entry.ref,
-    order: entry.order ?? entry.createdAt.getTime() + index,
-    quantity: entry.quantity ?? 1,
-  }));
-
-  const batches = chunkDocs(updates, 400);
-  for (const batchDocs of batches) {
-    const batch = writeBatch(db);
-    for (const entry of batchDocs) {
-      batch.update(entry.ref, {
-        order: entry.order,
-        quantity: entry.quantity,
-        updatedAt: serverTimestamp(),
-        updatedByName: userName,
-      });
-    }
-    await batch.commit();
-  }
+  await commitInBatches(backfillOrders(missing), (batch, { entry, fallbackOrder }) =>
+    batch.update(entry.ref, {
+      order: entry.order ?? fallbackOrder,
+      quantity: entry.quantity ?? 1,
+      updatedAt: serverTimestamp(),
+      updatedByName: userName,
+    }),
+  );
   await touchList(listId, userName);
 }
 
 export async function persistListOrder(lists: Array<{ id: string; order: number }>, userName: string) {
-  const batch = writeBatch(db);
-  for (const list of lists) {
+  await commitInBatches(lists, (batch, list) =>
     batch.update(doc(db, "lists", list.id), {
       order: list.order,
       updatedAt: serverTimestamp(),
       updatedByName: userName,
-    });
-  }
-  await batch.commit();
+    }),
+  );
 }
 
 export async function persistItemOrder(listId: string, items: Array<{ id: string; order: number }>, userName: string) {
-  const batch = writeBatch(db);
-  for (const item of items) {
+  await commitInBatches(items, (batch, item) =>
     batch.update(doc(db, "lists", listId, "items", item.id), {
       order: item.order,
       updatedAt: serverTimestamp(),
       updatedByName: userName,
-    });
-  }
-  await batch.commit();
+    }),
+  );
   await touchList(listId, userName);
 }
