@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import type { User } from "firebase/auth";
-import { createContext, type ReactNode, use, useEffect, useRef, useState } from "react";
+import { createContext, type ReactNode, use, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useAuthUser, userLabel } from "./auth";
 import {
   backfillItemOrder,
@@ -11,17 +11,30 @@ import {
 } from "./firestore";
 import { itemsKey, listsKey, useItems, useLists } from "./live-data";
 import { readStoredListId, storeSelectedListId } from "./storage";
-import type { ItemDoc, ListDoc } from "./types";
+import type { Editor, ItemDoc, ListDoc } from "./types";
+import { defaultView, showsManualItemOrder, type View, viewItems, viewLists } from "./view";
 
 export type Direction = "up" | "down";
 
 export type Shopping = {
   user: User | null;
-  userName: string;
+  /** The signed-in user as recorded on writes, or null when nobody is signed in. */
+  editor: Editor | null;
   lists: ListDoc[];
   listsLoaded: boolean;
+  /** All items of the current list, in manual order. */
   items: ItemDoc[];
   itemsLoaded: boolean;
+  view: View;
+  setView: (change: Partial<View>) => void;
+  search: string;
+  setSearch: (search: string) => void;
+  /** The lists and items as the screen shows them, after the sort and the filters. */
+  visibleLists: ListDoc[];
+  visibleItems: ItemDoc[];
+  /** True when the screen shows the manual order, so the user can move entries up and down. */
+  listOrderShown: boolean;
+  itemOrderShown: boolean;
   currentListId: string | null;
   currentList: ListDoc | null;
   selectList: (listId: string) => void;
@@ -89,14 +102,25 @@ function defaultListId(lists: ListDoc[]) {
   return (lists.find((list) => list.isDefault) ?? lists[0])?.id ?? null;
 }
 
+function noSubscription() {
+  return () => {};
+}
+
+export function toEditor(user: User | null): Editor | null {
+  return user ? { uid: user.uid, name: userLabel(user) } : null;
+}
+
 export function ShoppingProvider(props: {
   requestedListId: string | undefined;
   onSelectList: (listId: string, options?: { replace: boolean }) => void;
+  view: View;
+  onViewChange: (change: Partial<View>) => void;
   children: ReactNode;
 }) {
   const queryClient = useQueryClient();
   const user = useAuthUser();
-  const userName = userLabel(user);
+  const editor = toEditor(user);
+  const [search, setSearch] = useState("");
   const listsQuery = useLists();
   const [storedListId] = useState(readStoredListId);
   const currentListId = resolveListId(props.requestedListId, storedListId, listsQuery.data);
@@ -117,31 +141,51 @@ export function ShoppingProvider(props: {
     }
   }, [listsLoaded, currentListId, requestedListId, onSelectList]);
 
-  useListMaintenance(user, userName, lists, listsLoaded);
-  useItemMaintenance(user, userName, currentListId, items);
+  useListMaintenance(user, lists, listsLoaded);
+  useItemMaintenance(user, currentListId, items);
+
+  // The prerendered HTML has the default view. Use the view from the URL only after hydration, so the first
+  // client render agrees with that HTML. Without a signed-in user, "added by me" and "edited by me" mean nothing.
+  const hydrated = useSyncExternalStore(
+    noSubscription,
+    () => true,
+    () => false,
+  );
+  const urlView = hydrated ? props.view : defaultView;
+  const view = editor ? urlView : { ...urlView, who: defaultView.who };
+  const listOrderShown = view.lists === "manual";
+  const itemOrderShown = showsManualItemOrder(view, search);
 
   const value: Shopping = {
     user,
-    userName,
+    editor,
     lists,
     listsLoaded,
     items,
     itemsLoaded: itemsQuery.data !== undefined,
+    view,
+    setView: props.onViewChange,
+    search,
+    setSearch,
+    visibleLists: viewLists(lists, view.lists),
+    visibleItems: viewItems(items, view, editor, search),
+    listOrderShown,
+    itemOrderShown,
     currentListId,
     currentList,
     selectList: (listId) => onSelectList(listId),
     moveList: async (listId, direction) => {
-      const result = user ? reorder(lists, listId, direction) : null;
-      if (!result) return false;
+      const result = editor && listOrderShown ? reorder(lists, listId, direction) : null;
+      if (!result || !editor) return false;
       queryClient.setQueryData(listsKey, result.next);
-      await persistListOrder(result.changes, userName);
+      await persistListOrder(result.changes, editor);
       return true;
     },
     moveItem: async (itemId, direction) => {
-      const result = user && currentListId ? reorder(items, itemId, direction) : null;
-      if (!result || !currentListId) return false;
+      const result = editor && currentListId && itemOrderShown ? reorder(items, itemId, direction) : null;
+      if (!result || !editor || !currentListId) return false;
       queryClient.setQueryData(itemsKey(currentListId), result.next);
-      await persistItemOrder(currentListId, result.changes, userName);
+      await persistItemOrder(currentListId, result.changes, editor);
       return true;
     },
   };
@@ -149,39 +193,42 @@ export function ShoppingProvider(props: {
   return <ShoppingContext value={value}>{props.children}</ShoppingContext>;
 }
 
-function useListMaintenance(user: User | null, userName: string, lists: ListDoc[], listsLoaded: boolean) {
+function useListMaintenance(user: User | null, lists: ListDoc[], listsLoaded: boolean) {
   const ensuringDefault = useRef(false);
   const listOrderBackfilled = useRef(false);
   const hasDefault = lists.some((list) => list.isDefault);
 
   useEffect(() => {
-    if (!user || !listsLoaded || hasDefault || ensuringDefault.current) return;
+    const editor = toEditor(user);
+    if (!editor || !listsLoaded || hasDefault || ensuringDefault.current) return;
     ensuringDefault.current = true;
-    void createDefaultList({ userId: user.uid, userName }).finally(() => {
+    void createDefaultList(editor).finally(() => {
       ensuringDefault.current = false;
     });
-  }, [user, userName, listsLoaded, hasDefault]);
+  }, [user, listsLoaded, hasDefault]);
 
   // The orderBy query excludes lists that have no `order` field, so these lists never show in the snapshot.
   // Check the full collection one time in each session.
   useEffect(() => {
-    if (!user || listOrderBackfilled.current) return;
+    const editor = toEditor(user);
+    if (!editor || listOrderBackfilled.current) return;
     listOrderBackfilled.current = true;
-    backfillListOrder(userName).catch(() => {
+    backfillListOrder(editor).catch(() => {
       listOrderBackfilled.current = false;
     });
-  }, [user, userName]);
+  }, [user]);
 }
 
-function useItemMaintenance(user: User | null, userName: string, listId: string | null, items: ItemDoc[]) {
+function useItemMaintenance(user: User | null, listId: string | null, items: ItemDoc[]) {
   const backfilled = useRef(new Set<string>());
   const needsBackfill = items.some((item) => item.orderMissing || item.quantityMissing);
 
   useEffect(() => {
-    if (!user || !listId || !needsBackfill || backfilled.current.has(listId)) return;
+    const editor = toEditor(user);
+    if (!editor || !listId || !needsBackfill || backfilled.current.has(listId)) return;
     backfilled.current.add(listId);
-    backfillItemOrder(listId, userName).catch(() => {
+    backfillItemOrder(listId, editor).catch(() => {
       backfilled.current.delete(listId);
     });
-  }, [user, userName, listId, needsBackfill]);
+  }, [user, listId, needsBackfill]);
 }

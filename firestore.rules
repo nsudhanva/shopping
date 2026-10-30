@@ -29,6 +29,18 @@ service cloud.firestore {
       return !hasKey(data, key) || isNumber(data[key]);
     }
 
+    // updatedBy is the user id of the last editor. A write sets it to the writer, or keeps it unchanged
+    // (older clients do not send it). Documents from before this field existed do not have it.
+    function validUpdatedByOnCreate(data) {
+      return !hasKey(data, "updatedBy") || data.updatedBy == request.auth.uid;
+    }
+
+    function validUpdatedByOnUpdate(resourceData, newData) {
+      return !hasKey(newData, "updatedBy") ||
+        newData.updatedBy == request.auth.uid ||
+        (hasKey(resourceData, "updatedBy") && newData.updatedBy == resourceData.updatedBy);
+    }
+
     function isValidListCreate(data) {
       return data.keys().hasOnly([
           "name",
@@ -36,6 +48,7 @@ service cloud.firestore {
           "updatedAt",
           "createdBy",
           "createdByName",
+          "updatedBy",
           "updatedByName",
           "isDefault",
           "order"
@@ -48,6 +61,7 @@ service cloud.firestore {
         data.createdBy == request.auth.uid &&
         optionalString(data, "createdByName", 1, 128) &&
         optionalString(data, "updatedByName", 1, 128) &&
+        validUpdatedByOnCreate(data) &&
         isNumber(data.order);
     }
 
@@ -58,6 +72,7 @@ service cloud.firestore {
           "updatedAt",
           "createdBy",
           "createdByName",
+          "updatedBy",
           "updatedByName",
           "isDefault",
           "order"
@@ -71,6 +86,7 @@ service cloud.firestore {
         newData.createdAt == resourceData.createdAt &&
         optionalString(newData, "createdByName", 1, 128) &&
         optionalString(newData, "updatedByName", 1, 128) &&
+        validUpdatedByOnUpdate(resourceData, newData) &&
         optionalNumber(newData, "order");
     }
 
@@ -84,6 +100,7 @@ service cloud.firestore {
           "updatedAt",
           "createdBy",
           "createdByName",
+          "updatedBy",
           "updatedByName",
           "order"
         ]) &&
@@ -97,6 +114,7 @@ service cloud.firestore {
         data.createdBy == request.auth.uid &&
         optionalString(data, "createdByName", 1, 128) &&
         optionalString(data, "updatedByName", 1, 128) &&
+        validUpdatedByOnCreate(data) &&
         isNumber(data.order);
     }
 
@@ -110,6 +128,7 @@ service cloud.firestore {
           "updatedAt",
           "createdBy",
           "createdByName",
+          "updatedBy",
           "updatedByName",
           "order"
         ]) &&
@@ -124,6 +143,7 @@ service cloud.firestore {
         newData.createdAt == resourceData.createdAt &&
         optionalString(newData, "createdByName", 1, 128) &&
         optionalString(newData, "updatedByName", 1, 128) &&
+        validUpdatedByOnUpdate(resourceData, newData) &&
         optionalNumber(newData, "order");
     }
 

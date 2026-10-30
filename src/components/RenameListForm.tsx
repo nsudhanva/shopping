@@ -10,15 +10,15 @@ export function RenameListForm(props: {
   layout: "inline" | "stacked";
   onDone: () => void;
 }) {
-  const { user, userName } = useShopping();
+  const { editor } = useShopping();
   const [name, setName] = useState(props.initialName);
   const stacked = props.layout === "stacked";
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     const trimmed = name.trim();
-    if (!user || !trimmed) return;
-    await updateList(props.listId, { name: trimmed, userName });
+    if (!editor || !trimmed) return;
+    await updateList(props.listId, trimmed, editor);
     props.onDone();
   }
 

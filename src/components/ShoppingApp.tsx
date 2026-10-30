@@ -10,7 +10,7 @@ export function ShoppingApp(props: Omit<ComponentProps<typeof ShoppingProvider>,
   useEffect(completeRedirectSignIn, []);
 
   return (
-    <ShoppingProvider requestedListId={props.requestedListId} onSelectList={props.onSelectList}>
+    <ShoppingProvider {...props}>
       <Navbar />
       <div className="drawer lg:drawer-open">
         <input

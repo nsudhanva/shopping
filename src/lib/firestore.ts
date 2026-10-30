@@ -15,7 +15,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { ItemDoc, ListDoc } from "./types";
+import type { Editor, ItemDoc, ListDoc } from "./types";
 
 const listCollection = collection(db, "lists");
 
@@ -63,6 +63,7 @@ function mapList(snapshot: QuerySnapshot<DocumentData>): ListDoc[] {
       updatedAt: toDate(data.updatedAt),
       createdBy: String(data.createdBy ?? ""),
       createdByName: data.createdByName ? String(data.createdByName) : undefined,
+      updatedBy: data.updatedBy ? String(data.updatedBy) : undefined,
       updatedByName: data.updatedByName ? String(data.updatedByName) : undefined,
       isDefault: Boolean(data.isDefault),
       order,
@@ -87,12 +88,18 @@ function mapItems(snapshot: QuerySnapshot<DocumentData>): ItemDoc[] {
       updatedAt: toDate(data.updatedAt),
       createdBy: String(data.createdBy ?? ""),
       createdByName: data.createdByName ? String(data.createdByName) : undefined,
+      updatedBy: data.updatedBy ? String(data.updatedBy) : undefined,
       updatedByName: data.updatedByName ? String(data.updatedByName) : undefined,
       order,
       orderMissing: missing,
       quantityMissing,
     } satisfies ItemDoc;
   });
+}
+
+// Fields that record who changed a document and when. All writes use them.
+function stamp(editor: Editor) {
+  return { updatedAt: serverTimestamp(), updatedBy: editor.uid, updatedByName: editor.name };
 }
 
 function logListenError(error: Error) {
@@ -109,45 +116,31 @@ export function subscribeItems(listId: string, onChange: (items: ItemDoc[]) => v
   return onSnapshot(itemsQuery, (snapshot) => onChange(mapItems(snapshot)), logListenError);
 }
 
-export async function createList(params: {
-  name: string;
-  userId: string;
-  userName: string;
-  isDefault: boolean;
-}): Promise<string> {
+export async function createList(params: { name: string; editor: Editor; isDefault: boolean }): Promise<string> {
   const ref = await addDoc(listCollection, {
     name: params.name,
     createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    createdBy: params.userId,
-    createdByName: params.userName,
-    updatedByName: params.userName,
+    createdBy: params.editor.uid,
+    createdByName: params.editor.name,
+    ...stamp(params.editor),
     isDefault: params.isDefault,
     order: makeOrder(),
   });
   return ref.id;
 }
 
-export async function updateList(listId: string, data: { name: string; userName: string }) {
-  await updateDoc(doc(db, "lists", listId), {
-    name: data.name,
-    updatedByName: data.userName,
-    updatedAt: serverTimestamp(),
-  });
+export async function updateList(listId: string, name: string, editor: Editor) {
+  await updateDoc(doc(db, "lists", listId), { name, ...stamp(editor) });
 }
 
-export async function touchList(listId: string, userName: string) {
-  await updateDoc(doc(db, "lists", listId), {
-    updatedAt: serverTimestamp(),
-    updatedByName: userName,
-  });
+async function touchList(listId: string, editor: Editor) {
+  await updateDoc(doc(db, "lists", listId), stamp(editor));
 }
 
 export async function createItem(params: {
   listId: string;
   text: string;
-  userId: string;
-  userName: string;
+  editor: Editor;
   quantity?: number;
   unit?: string;
 }) {
@@ -157,42 +150,26 @@ export async function createItem(params: {
     quantity: params.quantity ?? 1,
     unit: params.unit ?? "",
     createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    createdBy: params.userId,
-    createdByName: params.userName,
-    updatedByName: params.userName,
+    createdBy: params.editor.uid,
+    createdByName: params.editor.name,
+    ...stamp(params.editor),
     order: makeOrder(),
   });
-  await touchList(params.listId, params.userName);
+  await touchList(params.listId, params.editor);
 }
 
-export async function updateItem(
-  listId: string,
-  itemId: string,
-  data: { text?: string; checked?: boolean; quantity?: number; unit?: string; userName: string },
-) {
-  const payload: {
-    text?: string;
-    checked?: boolean;
-    quantity?: number;
-    unit?: string;
-    updatedByName: string;
-    updatedAt: ReturnType<typeof serverTimestamp>;
-  } = {
-    updatedByName: data.userName,
-    updatedAt: serverTimestamp(),
-  };
-  if (data.text !== undefined) payload.text = data.text;
-  if (data.checked !== undefined) payload.checked = data.checked;
-  if (data.quantity !== undefined) payload.quantity = data.quantity;
-  if (data.unit !== undefined) payload.unit = data.unit;
-  await updateDoc(doc(db, "lists", listId, "items", itemId), payload);
-  await touchList(listId, data.userName);
+export type ItemChanges = { text?: string; checked?: boolean; quantity?: number; unit?: string };
+
+export async function updateItem(listId: string, itemId: string, changes: ItemChanges, editor: Editor) {
+  // Firestore rejects undefined values, so send only the fields that change.
+  const fields = Object.fromEntries(Object.entries(changes).filter(([, value]) => value !== undefined));
+  await updateDoc(doc(db, "lists", listId, "items", itemId), { ...fields, ...stamp(editor) });
+  await touchList(listId, editor);
 }
 
-export async function deleteItem(listId: string, itemId: string, userName: string) {
+export async function deleteItem(listId: string, itemId: string, editor: Editor) {
   await deleteDoc(doc(db, "lists", listId, "items", itemId));
-  await touchList(listId, userName);
+  await touchList(listId, editor);
 }
 
 // Firestore allows 500 writes in each batch. Use a lower number for a safety margin.
@@ -208,44 +185,39 @@ function itemsOf(listId: string) {
   return getDocs(collection(db, "lists", listId, "items"));
 }
 
-export async function updateAllItems(listId: string, checked: boolean, userName: string) {
+export async function updateAllItems(listId: string, checked: boolean, editor: Editor) {
   const itemsSnap = await itemsOf(listId);
-  await commitInBatches(itemsSnap.docs, (batch, item) =>
-    batch.update(item.ref, { checked, updatedAt: serverTimestamp(), updatedByName: userName }),
-  );
-  await touchList(listId, userName);
+  await commitInBatches(itemsSnap.docs, (batch, item) => batch.update(item.ref, { checked, ...stamp(editor) }));
+  await touchList(listId, editor);
 }
 
-export async function clearAllItems(listId: string, userName: string) {
+export async function clearAllItems(listId: string, editor: Editor) {
   const itemsSnap = await itemsOf(listId);
   await commitInBatches(itemsSnap.docs, (batch, item) => batch.delete(item.ref));
-  await touchList(listId, userName);
+  await touchList(listId, editor);
 }
 
-export async function clearCheckedItems(listId: string, userName: string) {
+export async function clearCheckedItems(listId: string, editor: Editor) {
   const itemsSnap = await itemsOf(listId);
   const checkedDocs = itemsSnap.docs.filter((docSnap) => Boolean(docSnap.data().checked));
   await commitInBatches(checkedDocs, (batch, item) => batch.delete(item.ref));
-  await touchList(listId, userName);
+  await touchList(listId, editor);
 }
 
-export function createDefaultList(params: { userId: string; userName: string }): Promise<string> {
-  return createList({ name: "Inbox", userId: params.userId, userName: params.userName, isDefault: true });
+export function createDefaultList(editor: Editor): Promise<string> {
+  return createList({ name: "Inbox", editor, isDefault: true });
 }
 
 export async function deleteListWithItems(params: {
   listId: string;
   keepItems: boolean;
   defaultListId?: string;
-  userId: string;
-  userName: string;
+  editor: Editor;
 }) {
   const itemsSnap = await itemsOf(params.listId);
   // Do not move items into the list that the user deletes. Firestore would delete them with that list.
   const usableDefault = params.defaultListId === params.listId ? undefined : params.defaultListId;
-  const targetListId = params.keepItems
-    ? (usableDefault ?? (await createDefaultList({ userId: params.userId, userName: params.userName })))
-    : null;
+  const targetListId = params.keepItems ? (usableDefault ?? (await createDefaultList(params.editor))) : null;
 
   await commitInBatches(itemsSnap.docs, (batch, item) => {
     if (targetListId) {
@@ -257,10 +229,9 @@ export async function deleteListWithItems(params: {
         quantity: resolveQuantity(data).quantity,
         unit: resolveUnit(data),
         createdAt: data.createdAt ?? serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        createdBy: params.userId,
-        createdByName: params.userName,
-        updatedByName: params.userName,
+        createdBy: params.editor.uid,
+        createdByName: params.editor.name,
+        ...stamp(params.editor),
         order: resolveOrder(data).order,
       });
     }
@@ -277,7 +248,7 @@ function backfillOrders<T extends { createdAt: Date }>(entries: T[]) {
     .map((entry, index) => ({ entry, fallbackOrder: entry.createdAt.getTime() + index }));
 }
 
-export async function backfillListOrder(userName: string) {
+export async function backfillListOrder(editor: Editor) {
   const snapshot = await getDocs(listCollection);
   const missing = snapshot.docs
     .filter((docSnap) => !isFiniteNumber(docSnap.data().order))
@@ -285,11 +256,11 @@ export async function backfillListOrder(userName: string) {
   if (missing.length === 0) return;
 
   await commitInBatches(backfillOrders(missing), (batch, { entry, fallbackOrder }) =>
-    batch.update(entry.ref, { order: fallbackOrder, updatedAt: serverTimestamp(), updatedByName: userName }),
+    batch.update(entry.ref, { order: fallbackOrder, ...stamp(editor) }),
   );
 }
 
-export async function backfillItemOrder(listId: string, userName: string) {
+export async function backfillItemOrder(listId: string, editor: Editor) {
   const itemsSnap = await itemsOf(listId);
   const missing = itemsSnap.docs
     .map((docSnap) => {
@@ -308,30 +279,21 @@ export async function backfillItemOrder(listId: string, userName: string) {
     batch.update(entry.ref, {
       order: entry.order ?? fallbackOrder,
       quantity: entry.quantity ?? 1,
-      updatedAt: serverTimestamp(),
-      updatedByName: userName,
+      ...stamp(editor),
     }),
   );
-  await touchList(listId, userName);
+  await touchList(listId, editor);
 }
 
-export async function persistListOrder(lists: Array<{ id: string; order: number }>, userName: string) {
+export async function persistListOrder(lists: Array<{ id: string; order: number }>, editor: Editor) {
   await commitInBatches(lists, (batch, list) =>
-    batch.update(doc(db, "lists", list.id), {
-      order: list.order,
-      updatedAt: serverTimestamp(),
-      updatedByName: userName,
-    }),
+    batch.update(doc(db, "lists", list.id), { order: list.order, ...stamp(editor) }),
   );
 }
 
-export async function persistItemOrder(listId: string, items: Array<{ id: string; order: number }>, userName: string) {
+export async function persistItemOrder(listId: string, items: Array<{ id: string; order: number }>, editor: Editor) {
   await commitInBatches(items, (batch, item) =>
-    batch.update(doc(db, "lists", listId, "items", item.id), {
-      order: item.order,
-      updatedAt: serverTimestamp(),
-      updatedByName: userName,
-    }),
+    batch.update(doc(db, "lists", listId, "items", item.id), { order: item.order, ...stamp(editor) }),
   );
-  await touchList(listId, userName);
+  await touchList(listId, editor);
 }

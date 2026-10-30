@@ -17,16 +17,15 @@ export function DeleteListDialog(props: { list: ListDoc; open: boolean; onClose:
   }, [props.open]);
 
   async function confirmDelete() {
-    const { user, userName } = shopping;
-    if (!user) return;
+    const { editor } = shopping;
+    if (!editor) return;
     setBusy(true);
     try {
       await deleteListWithItems({
         listId: props.list.id,
         keepItems,
         defaultListId: findDefaultListId(shopping.lists, props.list.id),
-        userId: user.uid,
-        userName,
+        editor,
       });
     } finally {
       setBusy(false);

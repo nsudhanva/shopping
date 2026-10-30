@@ -8,7 +8,10 @@ A shared shopping list with voice commands. It runs at https://shopping.sudhanva
 - Each item has a name, a quantity (default 1, decimals allowed) and an optional unit.
 - You can check, uncheck, edit, delete and reorder items.
 - You can create, rename, reorder and delete lists. When you delete a list, you can move its items to Inbox.
-- Each list has its own link (`/?list=<id>`).
+- Sort items by your order, name, newest added, recently edited or "to buy" first.
+- Show all items, only items to buy or only bought items. Show only items that you added or edited. Search by name.
+- Sort lists by your order, name or recent updates.
+- The URL keeps the list, the sort and the filters (for example `/?list=<id>&sort=name&show=tobuy`), so you can share a view.
 - Voice commands add, check, uncheck, edit and delete items, and change lists. The app speaks the result.
 - "Read list aloud" reads the current list. It works without sign-in.
 - The app has a dark theme and a light theme.
@@ -16,7 +19,7 @@ A shared shopping list with voice commands. It runs at https://shopping.sudhanva
 ## Stack
 
 - React 19 with React Compiler, built with Vite
-- TanStack Start (prerender), TanStack Router (`?list=` parameter), TanStack Query (cache for live data)
+- TanStack Start (prerender), TanStack Router (list, sort and filters in the URL), TanStack Query (cache for live data)
 - Tailwind CSS 4 and daisyUI 5
 - Firebase Hosting, Firebase Auth, Firestore and Cloud Functions (Node.js 24)
 - Sarvam AI for speech to text, intent parsing and text to speech
@@ -85,6 +88,7 @@ erDiagram
         number order
         string createdBy
         string createdByName
+        string updatedBy
         string updatedByName
         timestamp createdAt
         timestamp updatedAt
@@ -99,6 +103,7 @@ erDiagram
         number order
         string createdBy
         string createdByName
+        string updatedBy
         string updatedByName
         timestamp createdAt
         timestamp updatedAt
@@ -107,13 +112,13 @@ erDiagram
     LIST ||--o{ ITEM : "contains"
 ```
 
-Items are in the subcollection `lists/{listId}/items`.
+Items are in the subcollection `lists/{listId}/items`. `createdBy` and `updatedBy` are user ids. Documents that were last changed before `updatedBy` existed do not have it. For these documents, the "edited by me" filter uses `updatedByName`.
 
 ## Project layout
 
 | Path | Content |
 | --- | --- |
-| `src/routes/` | The page and its `?list=` parameter |
+| `src/routes/` | The page and its URL parameters |
 | `src/components/` | UI components |
 | `src/lib/` | Firebase setup, Firestore access and shared state |
 | `src/voice/` | Recorder, voice dialog, voice actions and speech |

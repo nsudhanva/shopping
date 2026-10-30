@@ -20,6 +20,8 @@ type Props = {
   item: ItemDoc;
   isFirst: boolean;
   isLast: boolean;
+  /** False when the screen does not show the manual order. Then the move buttons do not show. */
+  canMove: boolean;
   canEdit: boolean;
   editingText: string | null;
   meta: string;
@@ -199,7 +201,7 @@ function EditInput(props: { item: ItemDoc; text: string; className: string; acti
 }
 
 export function ItemRow(props: Props) {
-  const { item, isFirst, isLast, canEdit, editingText, meta, actions } = props;
+  const { item, isFirst, isLast, canMove, canEdit, editingText, meta, actions } = props;
   const editing = editingText !== null;
   const checkbox = (className: string) => (
     <input
@@ -236,26 +238,30 @@ export function ItemRow(props: Props) {
           <div className="flex items-center gap-2 flex-shrink-0">
             <QuantityControl item={item} canEdit={canEdit} size="sm" actions={actions} />
             <UnitInput item={item} canEdit={canEdit} actions={actions} />
-            <button
-              type="button"
-              className="btn btn-ghost btn-xs btn-square"
-              aria-label={`Move ${item.text} up`}
-              title="Move up"
-              disabled={!canEdit || isFirst}
-              onClick={() => actions.onMove(item, "up")}
-            >
-              ↑
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost btn-xs btn-square"
-              aria-label={`Move ${item.text} down`}
-              title="Move down"
-              disabled={!canEdit || isLast}
-              onClick={() => actions.onMove(item, "down")}
-            >
-              ↓
-            </button>
+            {canMove && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs btn-square"
+                  aria-label={`Move ${item.text} up`}
+                  title="Move up"
+                  disabled={!canEdit || isFirst}
+                  onClick={() => actions.onMove(item, "up")}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-xs btn-square"
+                  aria-label={`Move ${item.text} down`}
+                  title="Move down"
+                  disabled={!canEdit || isLast}
+                  onClick={() => actions.onMove(item, "down")}
+                >
+                  ↓
+                </button>
+              </>
+            )}
             <button
               type="button"
               className="btn btn-ghost btn-xs"

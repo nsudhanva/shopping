@@ -96,8 +96,8 @@ export function looksLikeMultiAddTranscript(transcript: string): boolean {
 }
 
 export async function runIntent(shopping: Shopping, intent: VoiceIntent): Promise<string> {
-  const { user, userName, currentListId, lists, items } = shopping;
-  if (!user) {
+  const { editor, currentListId, lists, items } = shopping;
+  if (!editor) {
     return "Please sign in to use voice controls.";
   }
 
@@ -122,8 +122,7 @@ export async function runIntent(shopping: Shopping, intent: VoiceIntent): Promis
         text: normalized.text,
         quantity: normalized.quantity,
         unit: normalized.unit,
-        userId: user.uid,
-        userName,
+        editor,
       });
       return `Added ${normalized.text}.`;
     }
@@ -141,8 +140,7 @@ export async function runIntent(shopping: Shopping, intent: VoiceIntent): Promis
           text: item.text,
           quantity: item.quantity,
           unit: item.unit,
-          userId: user.uid,
-          userName,
+          editor,
         });
       }
 
@@ -160,7 +158,7 @@ export async function runIntent(shopping: Shopping, intent: VoiceIntent): Promis
       const newText = intent.newText?.trim().slice(0, maxItemTextLength);
       if (!intent.itemId || !newText) return "I need the item and new name.";
       if (!hasItem(intent.itemId)) return "Could not find that item.";
-      await updateItem(currentListId, intent.itemId, { text: newText, userName });
+      await updateItem(currentListId, intent.itemId, { text: newText }, editor);
       return "Item updated.";
     }
     case "set_quantity": {
@@ -168,68 +166,69 @@ export async function runIntent(shopping: Shopping, intent: VoiceIntent): Promis
       if (!intent.itemId || typeof intent.quantity !== "number") return "I need the item and quantity.";
       if (!(intent.quantity > 0)) return "Quantity must be more than zero.";
       if (!hasItem(intent.itemId)) return "Could not find that item.";
-      await updateItem(currentListId, intent.itemId, { quantity: roundQuantity(intent.quantity), userName });
+      await updateItem(currentListId, intent.itemId, { quantity: roundQuantity(intent.quantity) }, editor);
       return "Quantity updated.";
     }
     case "set_unit": {
       if (!currentListId) return "No list is selected.";
       if (!intent.itemId || intent.unit === undefined) return "I need the item and unit.";
       if (!hasItem(intent.itemId)) return "Could not find that item.";
-      await updateItem(currentListId, intent.itemId, { unit: intent.unit.trim().slice(0, maxUnitLength), userName });
+      await updateItem(currentListId, intent.itemId, { unit: intent.unit.trim().slice(0, maxUnitLength) }, editor);
       return "Unit updated.";
     }
     case "check_item": {
       if (!currentListId) return "No list is selected.";
       if (!intent.itemId) return "I need the item to check.";
       if (!hasItem(intent.itemId)) return "Could not find that item.";
-      await updateItem(currentListId, intent.itemId, { checked: true, userName });
+      await updateItem(currentListId, intent.itemId, { checked: true }, editor);
       return "Item checked.";
     }
     case "uncheck_item": {
       if (!currentListId) return "No list is selected.";
       if (!intent.itemId) return "I need the item to uncheck.";
       if (!hasItem(intent.itemId)) return "Could not find that item.";
-      await updateItem(currentListId, intent.itemId, { checked: false, userName });
+      await updateItem(currentListId, intent.itemId, { checked: false }, editor);
       return "Item unchecked.";
     }
     case "delete_item": {
       if (!currentListId) return "No list is selected.";
       if (!intent.itemId) return "I need the item to delete.";
       if (!hasItem(intent.itemId)) return "Could not find that item.";
-      await deleteItem(currentListId, intent.itemId, userName);
+      await deleteItem(currentListId, intent.itemId, editor);
       return "Item deleted.";
     }
     case "move_item": {
       if (!currentListId) return "No list is selected.";
       if (!intent.itemId || !intent.direction) return "I need item and direction.";
       if (!hasItem(intent.itemId)) return "Could not find that item.";
+      if (!shopping.itemOrderShown) return "Switch to manual order and clear the filters to move items.";
       const moved = await shopping.moveItem(intent.itemId, intent.direction);
       return moved ? `Moved item ${intent.direction}.` : "That item cannot move further.";
     }
     case "check_all": {
       if (!currentListId) return "No list is selected.";
-      await updateAllItems(currentListId, true, userName);
+      await updateAllItems(currentListId, true, editor);
       return "Checked all items.";
     }
     case "uncheck_all": {
       if (!currentListId) return "No list is selected.";
-      await updateAllItems(currentListId, false, userName);
+      await updateAllItems(currentListId, false, editor);
       return "Unchecked all items.";
     }
     case "clear_checked": {
       if (!currentListId) return "No list is selected.";
-      await clearCheckedItems(currentListId, userName);
+      await clearCheckedItems(currentListId, editor);
       return "Cleared checked items.";
     }
     case "clear_all": {
       if (!currentListId) return "No list is selected.";
-      await clearAllItems(currentListId, userName);
+      await clearAllItems(currentListId, editor);
       return "Cleared all items.";
     }
     case "create_list": {
       const name = intent.listName?.trim().slice(0, maxListNameLength);
       if (!name) return "I need a name for the new list.";
-      const listId = await createList({ name, userId: user.uid, userName, isDefault: false });
+      const listId = await createList({ name, editor, isDefault: false });
       shopping.selectList(listId);
       return `Created list ${name}.`;
     }
@@ -244,7 +243,7 @@ export async function runIntent(shopping: Shopping, intent: VoiceIntent): Promis
       const newName = intent.newName?.trim().slice(0, maxListNameLength);
       if (!targetListId || !newName) return "I need the list and new name.";
       if (!hasList(targetListId)) return "Could not find that list.";
-      await updateList(targetListId, { name: newName, userName });
+      await updateList(targetListId, newName, editor);
       return "List renamed.";
     }
     case "delete_list": {
@@ -255,19 +254,20 @@ export async function runIntent(shopping: Shopping, intent: VoiceIntent): Promis
         listId: targetListId,
         keepItems: Boolean(intent.keepItems),
         defaultListId: findDefaultListId(lists, targetListId),
-        userId: user.uid,
-        userName,
+        editor,
       });
       return "List deleted.";
     }
     case "move_list": {
       if (!intent.listId || !intent.direction) return "I need list and direction.";
       if (!hasList(intent.listId)) return "Could not find that list.";
+      if (!shopping.listOrderShown) return "Switch the lists to manual order to move them.";
       const moved = await shopping.moveList(intent.listId, intent.direction);
       return moved ? `Moved list ${intent.direction}.` : "That list cannot move further.";
     }
     case "read_items": {
-      return listReadoutText(shopping.currentList, items);
+      // Read what the screen shows, with the current sort and filters.
+      return listReadoutText(shopping.currentList, shopping.visibleItems);
     }
     default:
       return "I could not understand the command.";

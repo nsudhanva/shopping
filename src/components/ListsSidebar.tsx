@@ -2,11 +2,12 @@ import { type FormEvent, useState } from "react";
 import { createList } from "../lib/firestore";
 import { maxListNameLength } from "../lib/limits";
 import { useShopping } from "../lib/shopping";
+import { listSorts, pick } from "../lib/view";
 import { RenameListForm } from "./RenameListForm";
 
 export function ListsSidebar(props: { onListChosen: () => void }) {
   const shopping = useShopping();
-  const { user, userName, lists, currentListId } = shopping;
+  const { user, editor, visibleLists: lists, currentListId, view, listOrderShown } = shopping;
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [renaming, setRenaming] = useState<{ listId: string; name: string } | null>(null);
@@ -14,10 +15,10 @@ export function ListsSidebar(props: { onListChosen: () => void }) {
   async function submitNewList(event: FormEvent) {
     event.preventDefault();
     const name = newName.trim();
-    if (!user || !name) return;
+    if (!editor || !name) return;
     setNewName("");
     setCreating(false);
-    const listId = await createList({ name, userId: user.uid, userName, isDefault: false });
+    const listId = await createList({ name, editor, isDefault: false });
     shopping.selectList(listId);
   }
 
@@ -29,6 +30,17 @@ export function ListsSidebar(props: { onListChosen: () => void }) {
           + New
         </button>
       </div>
+
+      <select
+        className="select select-sm w-full mb-3"
+        aria-label="Sort lists"
+        value={view.lists}
+        onChange={(event) => shopping.setView({ lists: pick(listSorts, event.target.value) ?? "manual" })}
+      >
+        <option value="manual">Sort: my order</option>
+        <option value="name">Sort: name</option>
+        <option value="updated">Sort: recently updated</option>
+      </select>
 
       {creating && (
         <form className="space-y-3 mb-4" onSubmit={submitNewList}>
@@ -87,26 +99,30 @@ export function ListsSidebar(props: { onListChosen: () => void }) {
                   {list.isDefault && <span className="badge badge-xs badge-ghost mt-0.5">Default</span>}
                 </button>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100 transition-opacity">
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-xs btn-square"
-                    aria-label={`Move ${list.name} up`}
-                    title="Move up"
-                    disabled={!user || index === 0}
-                    onClick={() => void shopping.moveList(list.id, "up")}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-xs btn-square"
-                    aria-label={`Move ${list.name} down`}
-                    title="Move down"
-                    disabled={!user || index === lists.length - 1}
-                    onClick={() => void shopping.moveList(list.id, "down")}
-                  >
-                    ↓
-                  </button>
+                  {listOrderShown && (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs btn-square"
+                        aria-label={`Move ${list.name} up`}
+                        title="Move up"
+                        disabled={!user || index === 0}
+                        onClick={() => void shopping.moveList(list.id, "up")}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-xs btn-square"
+                        aria-label={`Move ${list.name} down`}
+                        title="Move down"
+                        disabled={!user || index === lists.length - 1}
+                        onClick={() => void shopping.moveList(list.id, "down")}
+                      >
+                        ↓
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     className="btn btn-ghost btn-xs"

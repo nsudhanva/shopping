@@ -1,3 +1,6 @@
+// The signed-in user, as recorded on each write.
+export type Editor = { uid: string; name: string };
+
 export type ListDoc = {
   id: string;
   name: string;
@@ -5,6 +8,8 @@ export type ListDoc = {
   updatedAt: Date;
   createdBy: string;
   createdByName?: string;
+  // User id of the last editor. Documents that were last changed before this field existed do not have it.
+  updatedBy?: string;
   updatedByName?: string;
   isDefault: boolean;
   order: number;
@@ -21,6 +26,8 @@ export type ItemDoc = {
   updatedAt: Date;
   createdBy: string;
   createdByName?: string;
+  // User id of the last editor. Documents that were last changed before this field existed do not have it.
+  updatedBy?: string;
   updatedByName?: string;
   order: number;
   orderMissing?: boolean;
