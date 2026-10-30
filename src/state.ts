@@ -10,5 +10,6 @@ export const state: State = {
   editingItemId: null,
   editingItemText: "",
   backfillListsInFlight: false,
+  listOrderBackfilled: false,
   backfilledItemLists: new Set<string>(),
 };

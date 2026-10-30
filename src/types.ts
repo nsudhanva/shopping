@@ -37,5 +37,6 @@ export type State = {
   editingItemId: string | null;
   editingItemText: string;
   backfillListsInFlight: boolean;
+  listOrderBackfilled: boolean;
   backfilledItemLists: Set<string>;
 };

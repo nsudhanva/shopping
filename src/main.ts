@@ -22,7 +22,7 @@ import {
 } from "./firestore";
 import { state } from "./state";
 import type { ListDoc } from "./types";
-import { renderItems, renderLists, resetRenameForm, setAuthUi } from "./ui";
+import { renderItems, renderLists, resetRenameForm, setAuthUi, setEditingEnabled } from "./ui";
 
 let unsubscribeItems: (() => void) | null = null;
 const themeKey = "shopping-theme";
@@ -84,8 +84,16 @@ let recordingActive = false;
 let processingVoice = false;
 let pendingClarification: Record<string, unknown> | null = null;
 let voiceTimerInterval: ReturnType<typeof setInterval> | null = null;
+let voiceAutoCloseTimer: ReturnType<typeof setTimeout> | null = null;
 let voiceStartTime = 0;
 let activeMediaStream: MediaStream | null = null;
+
+// Mirror the Firestore rules so voice-derived values don't get rejected.
+const maxItemTextLength = 120;
+const maxListNameLength = 60;
+const maxUnitLength = 16;
+// bulbul:v3 accepts up to 2500 characters per request.
+const maxTtsChars = 2500;
 
 function readStoredListId(): string | null {
   try {
@@ -114,6 +122,35 @@ function getUserLabel(): string {
 
 function setVoiceStatus(text: string) {
   elements.voiceStatus.textContent = text;
+}
+
+function readStoredTheme(): "shopping-dark" | "shopping-light" {
+  try {
+    return localStorage.getItem(themeKey) === "shopping-light" ? "shopping-light" : "shopping-dark";
+  } catch {
+    return "shopping-dark";
+  }
+}
+
+function storeTheme(theme: "shopping-dark" | "shopping-light") {
+  try {
+    localStorage.setItem(themeKey, theme);
+  } catch {
+    // Ignore storage failures (private browsing, blocked storage, etc.).
+  }
+}
+
+// Rounds away float drift such as 1.1 - 1 = 0.10000000000000009.
+function roundQuantity(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+function hasItem(itemId: string | undefined): itemId is string {
+  return Boolean(itemId && state.items.some((item) => item.id === itemId));
+}
+
+function hasList(listId: string | undefined): listId is string {
+  return Boolean(listId && state.lists.some((list) => list.id === listId));
 }
 
 function applyTheme(theme: "shopping-dark" | "shopping-light") {
@@ -192,13 +229,23 @@ function maybeEnsureDefaultList() {
   });
 }
 
+// Lists without an `order` field are excluded by the orderBy query, so they never show up in the
+// snapshot. Check the whole collection once per session instead of waiting to see one.
 function maybeBackfillListOrder() {
-  if (!state.user || state.backfillListsInFlight) return;
-  if (!state.lists.some((list) => list.orderMissing)) return;
+  if (!state.user || state.backfillListsInFlight || state.listOrderBackfilled) return;
   state.backfillListsInFlight = true;
-  void backfillListOrder(getUserLabel()).finally(() => {
-    state.backfillListsInFlight = false;
-  });
+  void backfillListOrder(getUserLabel())
+    .then(() => {
+      state.listOrderBackfilled = true;
+    })
+    .finally(() => {
+      state.backfillListsInFlight = false;
+    });
+}
+
+// The default list to move items into when deleting `excludeListId`; never the list being deleted.
+function findDefaultListId(excludeListId: string): string | undefined {
+  return state.lists.find((list) => list.isDefault && list.id !== excludeListId)?.id;
 }
 
 function buildVoiceContext(): VoiceContext {
@@ -253,12 +300,12 @@ function listReadoutText(): string {
 }
 
 function normalizeVoiceAddEntry(entry: { text: string; quantity?: number; unit?: string }) {
-  const text = entry.text.trim();
+  const text = entry.text.trim().slice(0, maxItemTextLength);
   if (!text) return null;
 
   const hasQuantity = typeof entry.quantity === "number" && Number.isFinite(entry.quantity) && entry.quantity > 0;
   let quantity = hasQuantity ? entry.quantity : undefined;
-  let unit = entry.unit?.trim() ?? "";
+  let unit = entry.unit?.trim().slice(0, maxUnitLength) ?? "";
 
   if (!quantity && !unit) {
     const lowered = text.toLowerCase();
@@ -305,7 +352,7 @@ async function speakResponse(text: string) {
   }
 
   try {
-    const result = await speakText({ text: text.slice(0, 500) });
+    const result = await speakText({ text: text.slice(0, maxTtsChars) });
     const payload = result.data;
     const audio = new Audio(`data:${payload.mimeType};base64,${payload.audioBase64}`);
     await audio.play();
@@ -370,37 +417,51 @@ async function runIntent(intent: VoiceIntent): Promise<string> {
     }
     case "edit_item_text": {
       if (!state.currentListId) return "No list is selected.";
-      if (!intent.itemId || !intent.newText?.trim()) return "I need the item and new name.";
-      await updateItem(state.currentListId, intent.itemId, { text: intent.newText.trim(), userName: getUserLabel() });
+      const newText = intent.newText?.trim().slice(0, maxItemTextLength);
+      if (!intent.itemId || !newText) return "I need the item and new name.";
+      if (!hasItem(intent.itemId)) return "Could not find that item.";
+      await updateItem(state.currentListId, intent.itemId, { text: newText, userName: getUserLabel() });
       return "Item updated.";
     }
     case "set_quantity": {
       if (!state.currentListId) return "No list is selected.";
       if (!intent.itemId || typeof intent.quantity !== "number") return "I need the item and quantity.";
-      await updateItem(state.currentListId, intent.itemId, { quantity: intent.quantity, userName: getUserLabel() });
+      if (!(intent.quantity > 0)) return "Quantity must be more than zero.";
+      if (!hasItem(intent.itemId)) return "Could not find that item.";
+      await updateItem(state.currentListId, intent.itemId, {
+        quantity: roundQuantity(intent.quantity),
+        userName: getUserLabel(),
+      });
       return "Quantity updated.";
     }
     case "set_unit": {
       if (!state.currentListId) return "No list is selected.";
       if (!intent.itemId || intent.unit === undefined) return "I need the item and unit.";
-      await updateItem(state.currentListId, intent.itemId, { unit: intent.unit, userName: getUserLabel() });
+      if (!hasItem(intent.itemId)) return "Could not find that item.";
+      await updateItem(state.currentListId, intent.itemId, {
+        unit: intent.unit.trim().slice(0, maxUnitLength),
+        userName: getUserLabel(),
+      });
       return "Unit updated.";
     }
     case "check_item": {
       if (!state.currentListId) return "No list is selected.";
       if (!intent.itemId) return "I need the item to check.";
+      if (!hasItem(intent.itemId)) return "Could not find that item.";
       await updateItem(state.currentListId, intent.itemId, { checked: true, userName: getUserLabel() });
       return "Item checked.";
     }
     case "uncheck_item": {
       if (!state.currentListId) return "No list is selected.";
       if (!intent.itemId) return "I need the item to uncheck.";
+      if (!hasItem(intent.itemId)) return "Could not find that item.";
       await updateItem(state.currentListId, intent.itemId, { checked: false, userName: getUserLabel() });
       return "Item unchecked.";
     }
     case "delete_item": {
       if (!state.currentListId) return "No list is selected.";
       if (!intent.itemId) return "I need the item to delete.";
+      if (!hasItem(intent.itemId)) return "Could not find that item.";
       await deleteItem(state.currentListId, intent.itemId, getUserLabel());
       return "Item deleted.";
     }
@@ -446,7 +507,7 @@ async function runIntent(intent: VoiceIntent): Promise<string> {
       return "Cleared all items.";
     }
     case "create_list": {
-      const name = intent.listName?.trim();
+      const name = intent.listName?.trim().slice(0, maxListNameLength);
       if (!name) return "I need a name for the new list.";
       const listId = await createList({ name, userId: state.user.uid, userName: getUserLabel(), isDefault: false });
       setActiveList(listId);
@@ -454,23 +515,26 @@ async function runIntent(intent: VoiceIntent): Promise<string> {
     }
     case "select_list": {
       if (!intent.listId) return "I need a list to select.";
+      if (!hasList(intent.listId)) return "Could not find that list.";
       setActiveList(intent.listId);
       return "List selected.";
     }
     case "rename_list": {
       const targetListId = intent.listId ?? state.currentListId;
-      const newName = intent.newName?.trim();
+      const newName = intent.newName?.trim().slice(0, maxListNameLength);
       if (!targetListId || !newName) return "I need the list and new name.";
+      if (!hasList(targetListId)) return "Could not find that list.";
       await updateList(targetListId, { name: newName, userName: getUserLabel() });
       return "List renamed.";
     }
     case "delete_list": {
       const targetListId = intent.listId ?? state.currentListId;
       if (!targetListId) return "No list is selected.";
+      if (!hasList(targetListId)) return "Could not find that list.";
       await deleteListWithItems({
         listId: targetListId,
         keepItems: Boolean(intent.keepItems),
-        defaultListId: state.lists.find((list) => list.isDefault)?.id,
+        defaultListId: findDefaultListId(targetListId),
         userId: state.user.uid,
         userName: getUserLabel(),
       });
@@ -598,9 +662,18 @@ function showVoiceResult(text: string) {
   elements.voiceCancelBtn.textContent = "Close";
 
   // Auto-close after 2.5s
-  setTimeout(() => {
+  clearVoiceAutoClose();
+  voiceAutoCloseTimer = setTimeout(() => {
+    voiceAutoCloseTimer = null;
     closeVoiceModal();
   }, 2500);
+}
+
+function clearVoiceAutoClose() {
+  if (voiceAutoCloseTimer) {
+    clearTimeout(voiceAutoCloseTimer);
+    voiceAutoCloseTimer = null;
+  }
 }
 
 function resetVoiceModalUi() {
@@ -623,11 +696,11 @@ function cleanupMediaStream() {
   recordingChunks = [];
   mediaRecorder = null;
   recordingActive = false;
-  processingVoice = false;
 }
 
 function closeVoiceModal() {
   stopVoiceTimer();
+  clearVoiceAutoClose();
   // If still recording, abort silently
   if (recordingActive && mediaRecorder && mediaRecorder.state === "recording") {
     // Remove the onstop handler so it doesn't trigger processing
@@ -644,13 +717,18 @@ function closeVoiceModal() {
 }
 
 async function openVoiceModal() {
-  if (recordingActive || processingVoice) return;
+  if (processingVoice) {
+    setVoiceStatus("Still working on the last command…");
+    return;
+  }
+  if (recordingActive) return;
   if (!state.user) {
     setVoiceStatus("Sign in to use voice commands.");
     return;
   }
 
   // Reset and open
+  clearVoiceAutoClose();
   resetVoiceModalUi();
   elements.voiceModal.showModal();
 
@@ -658,7 +736,8 @@ async function openVoiceModal() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     activeMediaStream = stream;
     recordingChunks = [];
-    mediaRecorder = new MediaRecorder(stream);
+    const recorder = new MediaRecorder(stream);
+    mediaRecorder = recorder;
 
     mediaRecorder.ondataavailable = (event: BlobEvent) => {
       if (event.data.size > 0) recordingChunks.push(event.data);
@@ -675,7 +754,7 @@ async function openVoiceModal() {
       elements.voiceSendBtn.disabled = true;
 
       try {
-        const blob = new Blob(recordingChunks, { type: mediaRecorder?.mimeType || "audio/webm" });
+        const blob = new Blob(recordingChunks, { type: recorder.mimeType || "audio/webm" });
         if (blob.size > 0) {
           await processVoiceCommand(blob);
         } else {
@@ -687,7 +766,9 @@ async function openVoiceModal() {
         showVoiceResult("Something went wrong. Try again.");
         await speakResponse("Sorry, I could not process that.");
       } finally {
+        // processingVoice is only cleared here so a modal dismissed mid-request can't overlap a new recording.
         cleanupMediaStream();
+        processingVoice = false;
       }
     };
 
@@ -795,7 +876,12 @@ const itemHandlers = {
   },
   onQuantityChange: async (itemId: string, quantity: number) => {
     if (!state.user || !state.currentListId) return;
-    await updateItem(state.currentListId, itemId, { quantity, userName: getUserLabel() });
+    const rounded = roundQuantity(quantity);
+    if (!(rounded > 0)) {
+      renderItems(state, itemHandlers);
+      return;
+    }
+    await updateItem(state.currentListId, itemId, { quantity: rounded, userName: getUserLabel() });
   },
   onUnitChange: async (itemId: string, unit: string) => {
     if (!state.user || !state.currentListId) return;
@@ -853,6 +939,7 @@ subscribeLists((lists) => {
 onAuthStateChanged(auth, (user) => {
   state.user = user;
   setAuthUi(state);
+  setEditingEnabled(Boolean(user));
   renderLists(state, listHandlers);
   renderItems(state, itemHandlers);
   maybeEnsureDefaultList();
@@ -870,7 +957,13 @@ elements.signInBtn.addEventListener("click", async () => {
   try {
     await signInWithPopup(auth, provider);
   } catch (error) {
-    console.warn("Popup sign-in failed, redirecting", error);
+    const code = (error as { code?: string }).code;
+    if (code !== "auth/popup-blocked" && code !== "auth/operation-not-supported-in-this-environment") {
+      // Closing the popup or a duplicate click is not a reason to navigate away.
+      console.warn("Popup sign-in failed", error);
+      return;
+    }
+    console.warn("Popup sign-in unavailable, redirecting", error);
     await signInWithRedirect(auth, provider);
   }
 });
@@ -895,10 +988,11 @@ elements.newListForm.addEventListener("submit", async (event) => {
   const name = elements.newListInput.value.trim();
   if (!name) return;
 
-  await createList({ name, userId: state.user.uid, userName: getUserLabel(), isDefault: false });
-
   elements.newListForm.reset();
   elements.newListForm.classList.add("hidden");
+
+  const listId = await createList({ name, userId: state.user.uid, userName: getUserLabel(), isDefault: false });
+  setActiveList(listId);
 });
 
 elements.editListBtn.addEventListener("click", () => {
@@ -943,13 +1037,14 @@ elements.newItemForm.addEventListener("submit", async (event) => {
   const text = elements.newItemInput.value.trim();
   if (!text) return;
 
+  // Reset before the server round-trip so the next item typed in the meantime isn't wiped.
+  elements.newItemForm.reset();
   await createItem({
     listId: state.currentListId,
     text,
     userId: state.user.uid,
     userName: getUserLabel(),
   });
-  elements.newItemForm.reset();
 });
 
 elements.deleteListBtn.addEventListener("click", () => {
@@ -976,7 +1071,7 @@ elements.confirmDeleteBtn.addEventListener("click", async () => {
     await deleteListWithItems({
       listId: active.id,
       keepItems,
-      defaultListId: state.lists.find((list) => list.isDefault)?.id,
+      defaultListId: findDefaultListId(active.id),
       userId: state.user.uid,
       userName: getUserLabel(),
     });
@@ -1024,10 +1119,10 @@ elements.voiceCancelBtn.addEventListener("click", () => {
 // Also close on backdrop click / Escape via dialog's native close event
 elements.voiceModal.addEventListener("close", () => {
   // Cleanup if user dismissed via Escape or backdrop
-  if (recordingActive || processingVoice) {
+  if (recordingActive || activeMediaStream) {
     closeVoiceModal();
   }
-  setVoiceStatus("Tap mic to speak");
+  if (!processingVoice) setVoiceStatus("Tap mic to speak");
 });
 
 elements.voiceReadBtn.addEventListener("click", async () => {
@@ -1037,14 +1132,13 @@ elements.voiceReadBtn.addEventListener("click", async () => {
   setVoiceStatus("Tap mic to speak");
 });
 
-const storedTheme = (localStorage.getItem(themeKey) as "shopping-dark" | "shopping-light" | null) ?? "shopping-dark";
-applyTheme(storedTheme);
+applyTheme(readStoredTheme());
 
 elements.themeToggle.addEventListener("click", () => {
   const current =
     (document.documentElement.getAttribute("data-theme") as "shopping-dark" | "shopping-light") ?? "shopping-dark";
   const next = current === "shopping-dark" ? "shopping-light" : "shopping-dark";
-  localStorage.setItem(themeKey, next);
+  storeTheme(next);
   applyTheme(next);
 });
 

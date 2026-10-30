@@ -36,7 +36,7 @@ graph TB
         Hosting["Firebase Hosting"]
         Auth["Firebase Auth (Google)"]
         Firestore["Cloud Firestore"]
-        Functions["Cloud Functions (Node 22)"]
+        Functions["Cloud Functions (Node 24)"]
     end
 
     subgraph External["External APIs"]
@@ -133,9 +133,9 @@ flowchart LR
     B64 --> CF["Cloud Function<br/><b>parseVoiceCommand</b>"]
 
     subgraph CloudFunction["Cloud Function (us-east1)"]
-        CF --> STT["Sarvam STT<br/>(saaras:v3)"]
+        CF --> STT["Sarvam STT<br/>(saaras:v4)"]
         STT --> Transcript["Transcript text"]
-        Transcript --> Chat["Sarvam Chat<br/>(sarvam-m)"]
+        Transcript --> Chat["Sarvam Chat<br/>(sarvam-105b)"]
         Chat --> Intent["JSON Intent"]
     end
 
@@ -197,7 +197,7 @@ flowchart TB
     end
 
     Deploy["Firebase Deploy"] --> Hosting["Firebase Hosting<br/>(static files)"]
-    Deploy --> Functions["Cloud Functions<br/>(Node 22, us-east1)"]
+    Deploy --> Functions["Cloud Functions<br/>(Node 24, us-east1)"]
 
     Hosting --> CF["Cloudflare DNS"]
     CF --> Domain["shopping.sudhanva.me"]
@@ -256,6 +256,13 @@ Open `http://localhost:3000`
 
 ```bash
 bun run dev
+```
+
+### Checks
+
+```bash
+bun install --cwd functions
+bun run check   # tsc (app + functions) and biome
 ```
 
 ## Firebase

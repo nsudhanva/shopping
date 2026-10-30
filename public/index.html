@@ -6,7 +6,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>shopping</title>
   <meta name="description" content="A fast, simple, shared shopping list." />
-  <link rel="stylesheet" href="/styles.css" />
+  <script>
+    try {
+      if (localStorage.getItem("shopping-theme") === "shopping-light") {
+        document.documentElement.dataset.theme = "shopping-light";
+      }
+    } catch {}
+  </script>
+  <!-- ?v=2 bypasses copies cached under the old year-long immutable header; files now revalidate on every load. -->
+  <link rel="stylesheet" href="/styles.css?v=2" />
 </head>
 
 <body class="min-h-screen">
@@ -21,7 +29,7 @@
       </label>
     </div>
     <div class="flex-1 flex items-center gap-3">
-      <div class="avatar placeholder">
+      <div class="avatar avatar-placeholder">
         <div class="bg-primary text-primary-content rounded-xl w-10">
           <span class="text-lg font-bold">S</span>
         </div>
@@ -199,7 +207,7 @@
     </form>
   </dialog>
 
-  <script type="module" src="/assets/main.js"></script>
+  <script type="module" src="/assets/main.js?v=2"></script>
 </body>
 
 </html>

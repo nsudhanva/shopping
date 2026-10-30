@@ -53,6 +53,11 @@ function bindTapAndLongPress(element: HTMLElement, onTap: () => void, onLongPres
 
   element.addEventListener("pointercancel", clearHold);
   element.addEventListener("pointerleave", clearHold);
+
+  // Keyboard activation (Enter/Space) produces a click with detail 0 and no pointer events.
+  element.addEventListener("click", (e) => {
+    if (e.detail === 0) onTap();
+  });
 }
 
 function resolveUserLabel(name: string | undefined, id: string | undefined, currentUserId: string | null): string {
@@ -137,7 +142,8 @@ export function renderLists(state: State, handlers: ListHandlers) {
 
     // Actions
     const actions = document.createElement("div");
-    actions.className = "flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity";
+    actions.className =
+      "flex items-center gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100 transition-opacity";
     li.className = "group"; // Enable hover state
 
     const btnClass = "btn btn-ghost btn-xs btn-square";
@@ -189,7 +195,7 @@ export function renderLists(state: State, handlers: ListHandlers) {
   // Update main content area
   const active = state.lists.find((list) => list.id === state.currentListId) ?? null;
   const canDelete = Boolean(active && state.user);
-  elements.activeListTitle.textContent = active?.name ?? "No list selected";
+  elements.activeListTitle.textContent = active?.name ?? (state.listsLoaded ? "No list selected" : "Loading…");
 
   if (active) {
     const countLabel = `${state.items.length} item${state.items.length === 1 ? "" : "s"}`;
@@ -221,7 +227,36 @@ export function renderLists(state: State, handlers: ListHandlers) {
   }
 }
 
+type FocusSnapshot = { key: string; value: string; start: number | null; end: number | null };
+
+// Snapshots re-render the whole list (including the server ack for your own writes), so remember
+// the focused field and its in-progress value and put them back afterwards.
+function captureItemFocus(): FocusSnapshot | null {
+  const el = document.activeElement;
+  if (!(el instanceof HTMLInputElement) || !el.dataset.focusKey || !elements.items.contains(el)) return null;
+  return { key: el.dataset.focusKey, value: el.value, start: el.selectionStart, end: el.selectionEnd };
+}
+
+function restoreItemFocus(snapshot: FocusSnapshot | null) {
+  if (!snapshot) return;
+  const el = elements.items.querySelector<HTMLInputElement>(`input[data-focus-key="${CSS.escape(snapshot.key)}"]`);
+  if (!el || el.disabled) return;
+  el.value = snapshot.value;
+  el.focus();
+  try {
+    el.setSelectionRange(snapshot.start, snapshot.end);
+  } catch {
+    // Number inputs don't support selection ranges.
+  }
+}
+
 export function renderItems(state: State, handlers: ItemHandlers) {
+  const focus = captureItemFocus();
+  renderItemList(state, handlers);
+  restoreItemFocus(focus);
+}
+
+function renderItemList(state: State, handlers: ItemHandlers) {
   elements.items.innerHTML = "";
   if (!state.currentListId) return;
 
@@ -241,7 +276,7 @@ export function renderItems(state: State, handlers: ItemHandlers) {
 
     // Item card
     const li = document.createElement("li");
-    li.className = "card card-compact bg-base-200 shadow-sm";
+    li.className = "card card-sm bg-base-200 shadow-sm";
 
     const cardBody = document.createElement("div");
     cardBody.className = "card-body p-3 sm:p-4";
@@ -278,6 +313,7 @@ export function renderItems(state: State, handlers: ItemHandlers) {
       input.type = "text";
       input.maxLength = 120;
       input.value = state.editingItemText;
+      input.dataset.focusKey = `${item.id}:text`;
       input.addEventListener("input", () => {
         handlers.onEditInput(input.value);
       });
@@ -332,7 +368,7 @@ export function renderItems(state: State, handlers: ItemHandlers) {
     decBtn.type = "button";
     decBtn.className = "btn btn-sm join-item";
     decBtn.textContent = "−";
-    decBtn.disabled = !state.user;
+    decBtn.disabled = !state.user || item.quantity <= 1;
     decBtn.addEventListener("click", () => {
       if (!state.user) return;
       handlers.onQuantityChange(item.id, item.quantity - 1);
@@ -342,13 +378,15 @@ export function renderItems(state: State, handlers: ItemHandlers) {
     qtyInput.type = "number";
     qtyInput.inputMode = "decimal";
     qtyInput.step = "any";
+    qtyInput.min = "0";
     qtyInput.className = "input input-sm input-bordered join-item w-16 text-center";
     qtyInput.value = String(item.quantity);
+    qtyInput.dataset.focusKey = `${item.id}:qty`;
     qtyInput.disabled = !state.user;
     qtyInput.addEventListener("change", () => {
       if (!state.user) return;
       const parsed = Number.parseFloat(qtyInput.value);
-      if (!Number.isFinite(parsed)) {
+      if (!Number.isFinite(parsed) || parsed <= 0) {
         qtyInput.value = String(item.quantity);
         return;
       }
@@ -383,6 +421,7 @@ export function renderItems(state: State, handlers: ItemHandlers) {
     unitInput.placeholder = "unit";
     unitInput.maxLength = 12;
     unitInput.value = item.unit;
+    unitInput.dataset.focusKey = `${item.id}:unit`;
     unitInput.disabled = !state.user;
     unitInput.addEventListener("change", () => {
       if (!state.user) return;
@@ -492,6 +531,7 @@ export function renderItems(state: State, handlers: ItemHandlers) {
       mobileInput.type = "text";
       mobileInput.maxLength = 120;
       mobileInput.value = state.editingItemText;
+      mobileInput.dataset.focusKey = `${item.id}:text-mobile`;
       mobileInput.addEventListener("input", () => {
         handlers.onEditInput(mobileInput.value);
       });
@@ -535,7 +575,7 @@ export function renderItems(state: State, handlers: ItemHandlers) {
     mobileDecBtn.type = "button";
     mobileDecBtn.className = "btn btn-xs join-item";
     mobileDecBtn.textContent = "−";
-    mobileDecBtn.disabled = !state.user;
+    mobileDecBtn.disabled = !state.user || item.quantity <= 1;
     mobileDecBtn.addEventListener("click", () => {
       if (!state.user) return;
       handlers.onQuantityChange(item.id, item.quantity - 1);
@@ -545,13 +585,15 @@ export function renderItems(state: State, handlers: ItemHandlers) {
     mobileQtyInput.type = "number";
     mobileQtyInput.inputMode = "decimal";
     mobileQtyInput.step = "any";
+    mobileQtyInput.min = "0";
     mobileQtyInput.className = "input input-xs input-bordered join-item w-10 text-center";
     mobileQtyInput.value = String(item.quantity);
+    mobileQtyInput.dataset.focusKey = `${item.id}:qty-mobile`;
     mobileQtyInput.disabled = !state.user;
     mobileQtyInput.addEventListener("change", () => {
       if (!state.user) return;
       const parsed = Number.parseFloat(mobileQtyInput.value);
-      if (!Number.isFinite(parsed)) {
+      if (!Number.isFinite(parsed) || parsed <= 0) {
         mobileQtyInput.value = String(item.quantity);
         return;
       }

@@ -4,9 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:css": "bunx @tailwindcss/cli -i src/styles.css -o public/styles.css --minify",
+    "build:css": "tailwindcss -i src/styles.css -o public/styles.css --minify",
     "build:js": "bun build src/main.ts --outdir public/assets --target browser --format=esm --splitting --minify",
     "build": "bun run build:css && bun run build:js",
+    "typecheck": "tsc -p . && tsc -p functions",
+    "lint": "biome check",
+    "check": "bun run typecheck && bun run lint",
     "serve": "bunx serve public",
     "dev": "bun run build && bun run serve",
     "deploy": "bunx firebase-tools deploy",
@@ -14,8 +17,13 @@
     "deploy:firestore": "bunx firebase-tools deploy --only firestore"
   },
   "dependencies": {
-    "daisyui": "^5.5.18",
-    "firebase": "12.9.0",
-    "tailwindcss": "^4.1.18"
+    "daisyui": "^5.7.50",
+    "firebase": "13.1.0",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "@tailwindcss/cli": "4.3.3",
+    "typescript": "7.0.2"
   }
 }

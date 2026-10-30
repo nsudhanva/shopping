@@ -269,9 +269,10 @@ export async function deleteListWithItems(params: {
 }) {
   const itemsSnap = await getDocs(collection(db, "lists", params.listId, "items"));
   const itemDocs = itemsSnap.docs;
+  // Moving items into the list being deleted would delete them along with it.
   const defaultListId = params.keepItems
     ? await ensureDefaultListId({
-        existingId: params.defaultListId,
+        existingId: params.defaultListId === params.listId ? undefined : params.defaultListId,
         userId: params.userId,
         userName: params.userName,
       })

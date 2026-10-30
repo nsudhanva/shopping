@@ -7,9 +7,12 @@ import { SarvamAIClient } from "sarvamai";
 initializeApp();
 
 const sarvamApiKey = defineSecret("SARVAM_API_KEY");
+// bulbul:v3 accepts up to 2500 characters per request.
+const maxTtsChars = 2500;
 const defaultAllowedOrigins = [
   "https://shopping.sudhanva.me",
   "https://sudhanva-shopping-app.web.app",
+  "https://sudhanva-shopping-app.firebaseapp.com",
   "http://localhost:3000",
   "http://127.0.0.1:3000",
 ];
@@ -178,9 +181,9 @@ function normalizeIntent(raw: unknown): VoiceIntent {
     ? data.items
         .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
         .map((entry) => ({
-          text: coerceString(entry.text) ?? "",
+          text: coerceString(entry.text) ?? coerceString(entry.itemText) ?? "",
           quantity: coerceNumber(entry.quantity),
-          unit: coerceString(entry.unit),
+          unit: normalizeUnit(coerceString(entry.unit)),
         }))
         .filter((entry) => entry.text.length > 0)
     : undefined;
@@ -194,7 +197,7 @@ function normalizeIntent(raw: unknown): VoiceIntent {
     newText: coerceString(data.newText),
     newName: coerceString(data.newName),
     quantity: coerceNumber(data.quantity),
-    unit: coerceString(data.unit),
+    unit: normalizeUnit(coerceString(data.unit)),
     direction,
     keepItems: coerceBoolean(data.keepItems),
     question: coerceString(data.question),
@@ -250,17 +253,101 @@ function parseBulkItemsHeuristically(transcript: string): ParsedBulkItem[] {
   return parsed.length >= 2 ? parsed : [];
 }
 
+const itemTargetingIntents = new Set([
+  "edit_item_text",
+  "set_quantity",
+  "set_unit",
+  "check_item",
+  "uncheck_item",
+  "delete_item",
+  "move_item",
+]);
+
+function significantWords(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((word) => word.length >= 3);
+}
+
+function editDistance(a: string, b: string): number {
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const curr = [i];
+    for (let j = 1; j <= b.length; j++) {
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = curr;
+  }
+  return prev[b.length];
+}
+
+function wordsMatch(a: string, b: string): boolean {
+  // Prefix covers plurals (egg/eggs, tomato/tomatoes); edit distance covers small mishearings.
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  if (long.startsWith(short) && long.length - short.length <= 3) return true;
+  return editDistance(a, b) <= Math.floor(Math.max(a.length, b.length) / 4);
+}
+
+function transcriptMentions(transcript: string, itemText: string): boolean {
+  // Item names in another script (e.g. Kannada) can't be compared word-for-word, so trust the model.
+  if (/[^\p{Script=Latin}\p{N}\p{P}\p{S}\s]/u.test(transcript)) return true;
+  const itemWords = significantWords(itemText);
+  if (itemWords.length === 0) return true;
+  const spoken = significantWords(transcript);
+  return itemWords.some((itemWord) => spoken.some((word) => wordsMatch(itemWord, word)));
+}
+
+function itemsMentioned(transcript: string, context: VoiceContext): VoiceItemContext[] {
+  return context.items.filter((entry) => transcriptMentions(transcript, entry.text));
+}
+
+// Answering "which item?" with an item name: apply the original action to it without asking the model.
+function resolveItemClarification(
+  pending: Record<string, unknown> | null | undefined,
+  transcript: string,
+  context: VoiceContext,
+): VoiceIntent | null {
+  const original = normalizeIntent(pending?.originalIntent);
+  if (!itemTargetingIntents.has(original.type)) return null;
+  const mentioned = itemsMentioned(transcript, context);
+  return mentioned.length === 1 ? { ...original, itemId: mentioned[0].id } : null;
+}
+
+// The model sometimes maps an item that isn't on the list to an unrelated one ("delete the apples" ->
+// Bread). Correct it to the item actually named, or ask instead of acting on the wrong item.
+function guardItemIntent(intent: VoiceIntent, transcript: string, context: VoiceContext): VoiceIntent {
+  if (!itemTargetingIntents.has(intent.type) || !intent.itemId) return intent;
+  const item = context.items.find((entry) => entry.id === intent.itemId);
+  if (item && transcriptMentions(transcript, item.text)) return intent;
+  // If exactly one item is actually mentioned, use that one.
+  const mentioned = itemsMentioned(transcript, context);
+  if (mentioned.length === 1) return { ...intent, itemId: mentioned[0].id };
+  logger.info("Voice intent item not mentioned in transcript", { transcript, type: intent.type, item: item?.text });
+  const question = "I couldn't find that item on this list. Which item did you mean?";
+  const options = context.items.slice(0, 5).map((entry) => entry.text);
+  return {
+    type: "clarify",
+    question,
+    options,
+    pending: { originalTranscript: transcript, originalIntent: { ...intent, itemId: undefined }, question, options },
+  };
+}
+
 function basePrompt(forceBulk: boolean) {
   return [
     "You convert shopping app voice commands into strict JSON.",
     "Return only one JSON object with keys: type, itemId, listId, itemText, listName, newText, newName, quantity, unit, direction, keepItems, question, options, pending, items.",
     "Allowed type values: add_item, add_items_bulk, edit_item_text, set_quantity, set_unit, check_item, uncheck_item, delete_item, move_item, check_all, uncheck_all, clear_checked, clear_all, create_list, select_list, rename_list, delete_list, move_list, read_items, clarify, unknown.",
     "Use listId/itemId from provided context whenever possible. Do not invent ids.",
+    "Only pick an itemId when the transcript names that item (allowing for small mishearings or translations, e.g. ಹಾಲು = milk). Never map an item to an unrelated one (e.g. 'bananas' is not 'Bread'); if no item matches, return type=clarify with a question saying it is not on the list and the closest items as options.",
     "If command is ambiguous between multiple items/lists, return type=clarify with an English question and options array.",
     "English only. Keep question concise.",
     "For delete_list, set keepItems boolean if user mentioned keeping/moving items.",
     "For move actions, direction must be up or down.",
-    "If pendingClarification exists, resolve it with the new transcript and return a final non-clarify action whenever possible.",
+    "Checking an item means marking it as bought: check, check off, tick, tick off, cross off, got, mark done all mean check_item (or check_all).",
+    "uncheck_item / uncheck_all are only for explicit reversal: uncheck, untick, unmark, mark as not done, still need.",
+    "If pendingClarification exists, the new transcript answers its question: resolve it and return a final non-clarify action whenever possible. If pendingClarification.originalIntent is present, return that same type with the item the user just named.",
     "When user gives multiple add entries (comma-separated, and-separated, or repeated quantities), return type=add_items_bulk and put all entries in items[].",
     "Each items[] entry should include text, and quantity/unit when detectable.",
     forceBulk
@@ -295,25 +382,46 @@ export const parseVoiceCommand = onCall(
 
     const client = getClient();
 
-    const stt = await client.speechToText.transcribe({
-      file: audioBuffer,
-      model: "saaras:v3",
-      mode: "codemix",
-      language_code: "unknown",
-    });
+    const unheard: ParseVoiceResponse = {
+      transcript: "",
+      intent: { type: "unknown" },
+      responseText: "I could not hear you clearly. Please try again.",
+    };
 
-    const transcript = (stt.transcript ?? "").trim();
+    let transcript: string;
+    try {
+      const stt = await client.speechToText.transcribe({
+        file: audioBuffer,
+        model: "saaras:v4",
+        mode: "codemix",
+        language_code: "unknown",
+      });
+      transcript = (stt.transcript ?? "").trim();
+    } catch (error) {
+      // Very short or silent recordings come back as 400 "Failed to read the file".
+      if ((error as { statusCode?: number }).statusCode === 400) {
+        logger.warn("Speech-to-text rejected the audio", { bytes: audioBuffer.length, mimeType: data.mimeType, error });
+        return unheard;
+      }
+      throw error;
+    }
+
     if (!transcript) {
-      return {
-        transcript: "",
-        intent: { type: "unknown" },
-        responseText: "I could not hear you clearly. Please hold and speak again.",
-      };
+      return unheard;
+    }
+
+    const resolved = resolveItemClarification(data.pendingClarification, transcript, data.context);
+    if (resolved) {
+      return { transcript, intent: resolved, responseText: "Done." };
     }
 
     const completion = await client.chat.completions({
+      model: "sarvam-105b",
       temperature: 0.05,
       max_tokens: 300,
+      // sarvam-105b reasons by default and can spend the whole token budget before emitting JSON.
+      reasoning_effort: null as unknown as undefined,
+      response_format: { type: "json_object" },
       messages: [
         { role: "system", content: basePrompt(Boolean(data.forceBulk)) },
         {
@@ -346,6 +454,8 @@ export const parseVoiceCommand = onCall(
         };
       }
     }
+
+    intent = guardItemIntent(intent, transcript, data.context);
 
     let responseText = "Done.";
     if (intent.type === "clarify") {
@@ -383,8 +493,8 @@ export const speakText = onCall(
 
     const client = getClient();
     const tts = await client.textToSpeech.convert({
-      text: text.slice(0, 500),
-      target_language_code: "en-IN",
+      text: text.slice(0, maxTtsChars),
+      language_code: "en-IN",
       model: "bulbul:v3",
       speaker: "anand",
       output_audio_codec: "mp3",
