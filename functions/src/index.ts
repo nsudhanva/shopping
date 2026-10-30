@@ -181,7 +181,8 @@ function normalizeIntent(raw: unknown): VoiceIntent {
     ? data.items
         .filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object"))
         .map((entry) => ({
-          text: stripAmount(coerceString(entry.text) ?? coerceString(entry.itemText), coerceNumber(entry.quantity)) ?? "",
+          text:
+            stripAmount(coerceString(entry.text) ?? coerceString(entry.itemText), coerceNumber(entry.quantity)) ?? "",
           quantity: coerceNumber(entry.quantity),
           unit: normalizeUnit(coerceString(entry.unit)),
         }))
