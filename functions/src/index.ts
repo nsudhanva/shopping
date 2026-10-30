@@ -238,11 +238,15 @@ const numberWords: Record<string, number> = {
 const leadingAmount =
   /^(\d+(?:\.\d+)?|[a-z]+)\s*(?:kilos?|kilograms?|kgs?|grams?|g|litres?|liters?|ltrs?|l|ml|millilit(?:er|re)s?|packets?|packs?|bottles?|cans?|box(?:es)?|bunch(?:es)?|loa(?:f|ves)|pieces?|pcs|dozen)?\s+(?:of\s+)?(.+)$/i;
 
+// Speech to text sometimes hears "add" as "at", "ad" or "and", and the model can keep that word.
+const leadingAddWord = /^(?:please\s+)?(?:add|ad|at|and)\s+/i;
+
 // The model sometimes keeps the amount in the item name ("two kilos of rice" with quantity 2 and unit kg).
-// Remove the amount only if its number is the parsed quantity, so a name such as "7 Up" stays the same.
+// Remove the amount (and an "add" word before it) only if its number is the parsed quantity.
+// Thus a name such as "7 Up" stays the same.
 function stripAmount(text: string | undefined, quantity: number | undefined): string | undefined {
   if (!text || quantity === undefined) return text;
-  const match = text.trim().match(leadingAmount);
+  const match = text.trim().replace(leadingAddWord, "").match(leadingAmount);
   if (!match) return text;
   const word = match[1].toLowerCase();
   const amount = numberWords[word] ?? Number.parseFloat(word);
@@ -422,6 +426,7 @@ function basePrompt(forceBulk: boolean) {
     "If pendingClarification exists, the new transcript answers its question: resolve it and return a final non-clarify action whenever possible. If pendingClarification.originalIntent is present, return that same type with the item the user just named.",
     "When user gives multiple add entries (comma-separated, and-separated, or repeated quantities), return type=add_items_bulk and put all entries in items[].",
     "Each items[] entry should include text, and quantity/unit when detectable.",
+    "itemText and items[].text are only the item name, e.g. 'rice'. Put the amount in quantity and the unit in unit. Never include the command word or a misheard command word (e.g. 'At two kilos of rice' means add rice, quantity 2, unit kg).",
     forceBulk
       ? "forceBulk is true. Prefer add_items_bulk whenever there are 2 or more addable entries; do not collapse multiple entries into one text."
       : "If exactly one item is requested, return add_item with itemText.",
