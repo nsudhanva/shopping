@@ -1,10 +1,11 @@
+import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { signIn, signOut } from "../lib/auth";
 import { useShopping } from "../lib/shopping";
 import { readStoredTheme, storeTheme, type Theme } from "../lib/storage";
 
 export function Navbar() {
-  const { user } = useShopping();
+  const { user, homeListId, setSearch } = useShopping();
   // The prerendered HTML uses the dark theme. The inline head script applies a stored light theme before this runs.
   const [theme, setTheme] = useState<Theme>("shopping-dark");
   useEffect(() => setTheme(readStoredTheme()), []);
@@ -32,13 +33,21 @@ export function Navbar() {
           </svg>
         </label>
       </div>
-      <div className="flex-1 flex items-center gap-3">
-        <div className="avatar avatar-placeholder" aria-hidden="true">
-          <div className="bg-primary text-primary-content rounded-xl w-10">
-            <span className="text-lg font-bold">S</span>
+      <div className="flex-1">
+        {/* Home: the default list with the default sort and no filters. */}
+        <Link
+          to="/"
+          search={{ list: homeListId }}
+          onClick={() => setSearch("")}
+          className="flex w-fit items-center gap-3 rounded-lg"
+        >
+          <div className="avatar avatar-placeholder" aria-hidden="true">
+            <div className="bg-primary text-primary-content rounded-xl w-10">
+              <span className="text-lg font-bold">S</span>
+            </div>
           </div>
-        </div>
-        <h1 className="font-bold text-lg">shopping</h1>
+          <h1 className="font-bold text-lg">shopping</h1>
+        </Link>
       </div>
       <div className="flex-none gap-2 flex items-center">
         <button type="button" className="btn btn-ghost btn-sm hidden sm:inline-flex" onClick={toggleTheme}>

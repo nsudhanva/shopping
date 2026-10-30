@@ -37,6 +37,8 @@ export type Shopping = {
   itemOrderShown: boolean;
   currentListId: string | null;
   currentList: ListDoc | null;
+  /** The default list (Inbox). The home link goes to it. Undefined until the lists load. */
+  homeListId: string | undefined;
   selectList: (listId: string) => void;
   /** Resolves false when the list cannot move in that direction (not found, or already at the end). */
   moveList: (listId: string, direction: Direction) => Promise<boolean>;
@@ -173,6 +175,7 @@ export function ShoppingProvider(props: {
     itemOrderShown,
     currentListId,
     currentList,
+    homeListId: listsLoaded ? (defaultListId(lists) ?? undefined) : undefined,
     selectList: (listId) => onSelectList(listId),
     moveList: async (listId, direction) => {
       const result = editor && listOrderShown ? reorder(lists, listId, direction) : null;
